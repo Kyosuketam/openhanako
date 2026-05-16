@@ -72,7 +72,6 @@ describe("HTTP route security policy", () => {
       .toMatchObject({ allowed: true });
     expect(authorizeHttpRoute({ method: "PUT", path: "/api/preferences/models", principal: settingsWriter }))
       .toMatchObject({ allowed: true });
-
     expect(authorizeHttpRoute({ method: "POST", path: "/api/providers/test", principal: providerManager }))
       .toMatchObject({ allowed: true });
     expect(authorizeHttpRoute({ method: "POST", path: "/api/providers/fetch-models", principal: providerManager }))
@@ -120,6 +119,10 @@ describe("HTTP route security policy", () => {
       ["GET", "/mobile/assets/mobile.js"],
       ["GET", "/mobile/manifest.webmanifest"],
       ["GET", "/mobile/sw.js"],
+      ["GET", "/mobile/icon.png"],
+      ["GET", "/mobile/lib/i18n.js"],
+      ["GET", "/mobile/themes/warm-paper.css"],
+      ["GET", "/mobile/locales/zh.json"],
       ["POST", "/api/web-auth/login"],
       ["GET", "/api/web-auth/session"],
     ]) {
@@ -134,10 +137,25 @@ describe("HTTP route security policy", () => {
     const writer = devicePrincipal(["chat", "files.read", "files.write"]);
 
     for (const [method, path] of [
+      ["GET", "/api/mobile/bootstrap"],
+      ["GET", "/api/avatar/agent"],
+      ["GET", "/api/agents/hana/avatar"],
+      ["GET", "/api/models"],
+      ["POST", "/api/models/set"],
+      ["POST", "/api/models/switch"],
+      ["GET", "/api/session-permission-mode"],
+      ["POST", "/api/session-permission-mode"],
+      ["POST", "/api/session-thinking-level"],
+      ["GET", "/api/browser/session-states"],
       ["GET", "/api/mobile/workbench/files"],
       ["GET", "/api/mobile/workbench/search"],
       ["GET", "/api/mobile/workbench/content"],
       ["HEAD", "/api/mobile/workbench/content"],
+      ["GET", "/api/desk/path"],
+      ["GET", "/api/desk/files"],
+      ["GET", "/api/desk/search-files"],
+      ["GET", "/api/desk/jian"],
+      ["GET", "/api/preferences/workspace-ui-state"],
     ]) {
       expect(authorizeHttpRoute({ method, path, principal: reader }))
         .toMatchObject({ allowed: true });
@@ -151,6 +169,41 @@ describe("HTTP route security policy", () => {
     expect(authorizeHttpRoute({
       method: "POST",
       path: "/api/mobile/workbench/actions",
+      principal: writer,
+    })).toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({
+      method: "POST",
+      path: "/api/desk/files",
+      principal: reader,
+    })).toMatchObject({ allowed: false, error: "insufficient_scope" });
+    expect(authorizeHttpRoute({
+      method: "POST",
+      path: "/api/desk/files",
+      principal: writer,
+    })).toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({
+      method: "POST",
+      path: "/api/desk/jian",
+      principal: writer,
+    })).toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({
+      method: "POST",
+      path: "/api/upload-blob",
+      principal: writer,
+    })).toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({
+      method: "POST",
+      path: "/api/upload-blob",
+      principal: reader,
+    })).toMatchObject({ allowed: false, error: "insufficient_scope" });
+    expect(authorizeHttpRoute({
+      method: "PUT",
+      path: "/api/preferences/workspace-ui-state",
+      principal: reader,
+    })).toMatchObject({ allowed: false, error: "insufficient_scope" });
+    expect(authorizeHttpRoute({
+      method: "PUT",
+      path: "/api/preferences/workspace-ui-state",
       principal: writer,
     })).toMatchObject({ allowed: true });
   });

@@ -168,7 +168,8 @@
     "fileActions": {
       "more": "更多檔案操作",
       "revealInFinder": "在 Finder 中顯示",
-      "copyPath": "複製檔案路徑"
+      "copyPath": "複製檔案路徑",
+      "downloadToDevice": "下載到本機"
     }
   },
   "time": {
@@ -803,7 +804,7 @@
       "mobileUrlLocalHint": "目前僅允許本機存取，開啟區域網路後會顯示手機可用地址",
       "qrCode": "QR Code",
       "qrCodeHint": "用手機掃碼開啟 PWA",
-      "restartRequired": "網路設定已儲存，重新啟動 Hana 後生效",
+      "restartRequired": "連接埠變更已儲存，重新啟動 Hana 後生效",
       "saveNetwork": "儲存存取設定",
       "mobileKeys": "手機密鑰",
       "generateMobileKey": "產生手機存取密鑰",

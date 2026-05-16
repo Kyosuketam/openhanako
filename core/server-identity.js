@@ -2,6 +2,8 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { ensureDeviceAccessRegistries } from "./device-registry.js";
+import { ensureExecutionLeaseRegistry } from "./execution-lease-registry.js";
+import { ensureGrantRegistry } from "./grant-registry.js";
 import { ensureServerNetworkConfig } from "./server-network-config.js";
 import { ensureStudioMountRegistry } from "./studio-mounts.js";
 
@@ -99,8 +101,22 @@ export function ensureRemoteAccessFoundationRegistries(hanakoHome, { now = new D
       ...ensureDeviceAccessRegistries(hanakoHome, { now }).created,
       ...ensureServerNetworkConfig(hanakoHome, { now }).created,
       ...ensureStudioMountRegistry(hanakoHome, { now }).created,
+      ...ensureSecurityRegistries(hanakoHome, { now }).created,
     ],
   };
+}
+
+function ensureSecurityRegistries(hanakoHome, { now }) {
+  const created = [];
+  const grantPath = path.join(hanakoHome, "security", "grants.json");
+  const leasePath = path.join(hanakoHome, "security", "execution-leases.json");
+  const hadGrant = fs.existsSync(grantPath);
+  const hadLease = fs.existsSync(leasePath);
+  ensureGrantRegistry(hanakoHome, { now });
+  ensureExecutionLeaseRegistry(hanakoHome, { now });
+  if (!hadGrant) created.push(path.join("security", "grants.json"));
+  if (!hadLease) created.push(path.join("security", "execution-leases.json"));
+  return { created };
 }
 
 function readRequiredStudioRegistry(hanakoHome) {

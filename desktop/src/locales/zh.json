@@ -169,7 +169,8 @@
     "fileActions": {
       "more": "更多文件操作",
       "revealInFinder": "打开文件夹",
-      "copyPath": "复制文件路径"
+      "copyPath": "复制文件路径",
+      "downloadToDevice": "下载到本机"
     }
   },
   "time": {
@@ -813,7 +814,7 @@
       "mobileUrlLocalHint": "当前仅允许本机访问，开启局域网后会显示手机可用地址",
       "qrCode": "二维码",
       "qrCodeHint": "用手机扫码打开 PWA",
-      "restartRequired": "网络设置已保存，重启 Hana 后生效",
+      "restartRequired": "端口变更已保存，重启 Hana 后生效",
       "saveNetwork": "保存访问设置",
       "mobileKeys": "手机密钥",
       "generateMobileKey": "生成手机访问密钥",

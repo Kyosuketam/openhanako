@@ -72,10 +72,16 @@ function getWritableSessionManager(engine, sessionPath) {
   return SessionManager.open(sessionPath, path.dirname(sessionPath));
 }
 
+function authorizeSessionRoute(requestContext, capability, target) {
+  if (requestContext.authPrincipal?.kind === "unknown") return { allowed: true, reason: "legacy_test_context" };
+  if (typeof requestContext.authorize !== "function") return { allowed: false, reason: "missing_policy" };
+  return requestContext.authorize(capability, target);
+}
+
 const TODO_COMPLETE_MESSAGE =
   "[Hana Todo] The user marked the current todo list as completed and removed it from the session UI. Treat every item in that list as completed. Create a new todo list only if new work needs tracking.";
 
-export function createSessionsRoute(engine) {
+export function createSessionsRoute(engine, hub = null) {
   const route = new Hono();
 
   // session-meta.json sidecar 按 session 目录共享；同一个 request 里遍历几十个 block
@@ -201,6 +207,11 @@ export function createSessionsRoute(engine) {
   route.get("/sessions", async (c) => {
     try {
       const requestContext = createRequestContext(c, engine);
+      const auth = authorizeSessionRoute(requestContext, "sessions.read", {
+        kind: "studio",
+        studioId: requestContext.studioId,
+      });
+      if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
       const runtimeStudioId = requestContext.runtimeContext?.studioId || null;
       const principalStudioId = requestContext.authPrincipal?.studioId || null;
       // Same-Studio projection v0: paired clients may see the legacy session store
@@ -251,6 +262,7 @@ export function createSessionsRoute(engine) {
   // 获取单个 session 的滚动摘要。列表只暴露 hasSummary，正文按需读取。
   route.get("/sessions/summary", async (c) => {
     try {
+      const requestContext = createRequestContext(c, engine);
       const sessionPath = c.req.query("path") || null;
       if (!sessionPath) {
         return c.json({ error: t("error.missingParam", { param: "path" }) }, 400);
@@ -258,6 +270,12 @@ export function createSessionsRoute(engine) {
       if (!isValidSessionPath(sessionPath, engine.agentsDir)) {
         return c.json({ error: "Invalid session path" }, 403);
       }
+      const auth = authorizeSessionRoute(requestContext, "sessions.read", {
+        kind: "session",
+        studioId: requestContext.studioId,
+        sessionPath,
+      });
+      if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
 
       const record = getSessionSummaryRecord(sessionPath);
       return c.json(serializeSessionSummaryRecord(record));
@@ -269,6 +287,7 @@ export function createSessionsRoute(engine) {
   // 置顶 / 取消置顶 session
   route.post("/sessions/pin", async (c) => {
     try {
+      const requestContext = createRequestContext(c, engine);
       const body = await safeJson(c);
       const { path: sessionPath, pinned } = body;
       if (!sessionPath) {
@@ -280,6 +299,12 @@ export function createSessionsRoute(engine) {
       if (!isValidSessionPath(sessionPath, engine.agentsDir)) {
         return c.json({ error: "Invalid session path" }, 403);
       }
+      const auth = authorizeSessionRoute(requestContext, "sessions.write", {
+        kind: "session",
+        studioId: requestContext.studioId,
+        sessionPath,
+      });
+      if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
       const pinnedAt = await engine.setSessionPinned(sessionPath, pinned);
       return c.json({ ok: true, pinnedAt });
     } catch (err) {
@@ -290,10 +315,17 @@ export function createSessionsRoute(engine) {
   // 获取 session 的消息（支持 ?path= 指定 session，否则读焦点 session）
   route.get("/sessions/messages", async (c) => {
     try {
+      const requestContext = createRequestContext(c, engine);
       const queryPath = c.req.query("path") || null;
       if (queryPath && !isValidSessionPath(queryPath, engine.agentsDir)) {
         return c.json({ error: "Invalid session path" }, 403);
       }
+      const auth = authorizeSessionRoute(requestContext, "sessions.read", {
+        kind: "session",
+        studioId: requestContext.studioId,
+        sessionPath: queryPath || engine.currentSessionPath || null,
+      });
+      if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
       const sourceMessages = await loadSessionHistoryMessages(engine, queryPath);
 
       // 分页参数
@@ -435,11 +467,18 @@ export function createSessionsRoute(engine) {
 
   route.post("/sessions/latest-user-message/replay", async (c) => {
     try {
+      const requestContext = createRequestContext(c, engine);
       const body = await safeJson(c);
       const sessionPath = body?.path || body?.sessionPath || null;
       if (!sessionPath) {
         return c.json({ error: t("error.missingParam", { param: "path" }) }, 400);
       }
+      const auth = authorizeSessionRoute(requestContext, "sessions.write", {
+        kind: "session",
+        studioId: requestContext.studioId,
+        sessionPath,
+      });
+      if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
       if (!isValidSessionPath(sessionPath, engine.agentsDir) || !isActiveSessionPath(sessionPath, engine.agentsDir)) {
         return c.json({ error: "Invalid session path" }, 403);
       }
@@ -467,11 +506,18 @@ export function createSessionsRoute(engine) {
 
   route.post("/sessions/todos/complete", async (c) => {
     try {
+      const requestContext = createRequestContext(c, engine);
       const body = await safeJson(c);
       const sessionPath = body?.path;
       if (!sessionPath) {
         return c.json({ error: t("error.missingParam", { param: "path" }) }, 400);
       }
+      const auth = authorizeSessionRoute(requestContext, "sessions.write", {
+        kind: "session",
+        studioId: requestContext.studioId,
+        sessionPath,
+      });
+      if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
       if (!isValidSessionPath(sessionPath, engine.agentsDir) || !isActiveSessionPath(sessionPath, engine.agentsDir)) {
         return c.json({ error: "Invalid session path" }, 403);
       }
@@ -511,6 +557,12 @@ export function createSessionsRoute(engine) {
   // 新建 session（可选指定工作目录和 agentId）
   route.post("/sessions/new", async (c) => {
     try {
+      const requestContext = createRequestContext(c, engine);
+      const auth = authorizeSessionRoute(requestContext, "sessions.write", {
+        kind: "studio",
+        studioId: requestContext.studioId,
+      });
+      if (!auth.allowed) return c.json({ error: "insufficient_scope", reason: auth.reason }, 403);
       const body = await safeJson(c);
       const { cwd, memoryEnabled, agentId, currentSessionPath: oldSessionPath } = body;
       const workspaceFolders = Array.isArray(body.workspaceFolders)
@@ -556,7 +608,7 @@ export function createSessionsRoute(engine) {
       }
 
       console.log("[sessions] session 创建完成");
-      return c.json({
+      const response = {
         ok: true,
         path: newSessionPath,
         cwd: engine.cwd,
@@ -568,7 +620,12 @@ export function createSessionsRoute(engine) {
         accessMode: engine.accessMode,
         thinkingLevel: engine.getSessionThinkingLevel?.(newSessionPath) || engine.getThinkingLevel?.() || "auto",
         memoryModelUnavailableReason: engine.memoryModelUnavailableReason || null,
-      });
+      };
+      hub?.eventBus?.emit?.({
+        type: "session_created",
+        session: response,
+      }, newSessionPath);
+      return c.json(response);
     } catch (err) {
       return c.json({ error: err.message }, 500);
     }

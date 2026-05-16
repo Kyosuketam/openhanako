@@ -26,7 +26,7 @@ const CONNECTION_PROFILES = Object.freeze({
   lan: Object.freeze({
     kind: "lan",
     transport: "trusted_lan",
-    credentialKinds: Object.freeze(["device_credential"]),
+    credentialKinds: Object.freeze(["device_credential", "user_session"]),
     trustState: "lan",
     remoteReachable: true,
     requiresDevicePairing: true,
@@ -37,7 +37,7 @@ const CONNECTION_PROFILES = Object.freeze({
   custom_remote: Object.freeze({
     kind: "custom_remote",
     transport: "user_managed_tunnel",
-    credentialKinds: Object.freeze(["device_credential"]),
+    credentialKinds: Object.freeze(["device_credential", "user_session"]),
     trustState: "tunnel",
     remoteReachable: true,
     requiresDevicePairing: true,
@@ -115,7 +115,7 @@ export function deriveStudioAccessGrant(connection) {
   return {
     grantId: `access:${connection.connectionId}:${connection.studioId}`,
     connectionId: connection.connectionId,
-    actorKind: actorKindForCredential(connection.credentialKind),
+    actorKind: actorKindForConnection(connection),
     scope: {
       serverId: connection.serverId,
       userId: connection.userId ?? null,
@@ -144,13 +144,16 @@ function deriveCapabilities(connection, profile) {
   return STUDIO_ACCESS_CAPABILITIES.filter((capability) => allowed.has(capability));
 }
 
-function actorKindForCredential(credentialKind) {
-  switch (credentialKind) {
+function actorKindForConnection(connection) {
+  switch (connection.credentialKind) {
     case "loopback_token":
       return "local_user";
     case "device_credential":
       return "device";
     case "user_session":
+      if (!connection.platformAccountId && !connection.officialServiceKind) {
+        return "account_user";
+      }
       return "platform_account";
     case "none":
     default:

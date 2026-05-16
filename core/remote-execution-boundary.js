@@ -77,6 +77,7 @@ export function validateExecutionLease(value, { now = new Date().toISOString() }
     agentId: value.agentId,
     sessionId: value.sessionId,
     actorPrincipalId: value.actorPrincipalId,
+    capabilityDecisionId: value.capabilityDecisionId ?? null,
     mountId: value.mountId ?? null,
     resourceIds: Array.isArray(value.resourceIds) ? [...value.resourceIds] : [],
     commandClass: value.commandClass,

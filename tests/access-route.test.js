@@ -120,6 +120,7 @@ describe("access route", () => {
         restartRequired: false,
         lanAddresses: ["192.168.31.75"],
         localMobileUrl: "http://127.0.0.1:14500/mobile/",
+        candidateLanMobileUrl: "http://192.168.31.75:14500/mobile/",
         lanMobileUrl: null,
       },
       account: {
@@ -134,7 +135,33 @@ describe("access route", () => {
     expect(JSON.stringify(data)).not.toContain("secretHash");
   });
 
-  it("saves LAN network settings and reports that a restart is required", async () => {
+  it("enables LAN access immediately when the port is unchanged", async () => {
+    tmpDir = makeTmpDir();
+    writeIdentity(tmpDir);
+    const app = await makeApp(tmpDir, { mode: "loopback", listenHost: "127.0.0.1", actualPort: 14500 });
+
+    const res = await app.request("/api/access/network", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "lan", listenPort: 14500 }),
+    });
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toMatchObject({
+      network: {
+        mode: "lan",
+        listenHost: "0.0.0.0",
+        configuredPort: 14500,
+        restartRequired: false,
+        lanMobileUrl: "http://192.168.31.75:14500/mobile/",
+      },
+    });
+    expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "server-network.json"), "utf-8")))
+      .toMatchObject({ mode: "lan", listenHost: "0.0.0.0", listenPort: 14500 });
+  });
+
+  it("still reports a restart requirement when the listening port changes", async () => {
     tmpDir = makeTmpDir();
     writeIdentity(tmpDir);
     const app = await makeApp(tmpDir, { mode: "loopback", listenHost: "127.0.0.1", actualPort: 14500 });
@@ -146,18 +173,15 @@ describe("access route", () => {
     });
 
     expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data).toMatchObject({
+    expect(await res.json()).toMatchObject({
       network: {
         mode: "lan",
-        listenHost: "0.0.0.0",
         configuredPort: 14550,
+        actualPort: 14500,
         restartRequired: true,
         lanMobileUrl: "http://192.168.31.75:14500/mobile/",
       },
     });
-    expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "server-network.json"), "utf-8")))
-      .toMatchObject({ mode: "lan", listenHost: "0.0.0.0", listenPort: 14550 });
   });
 
   it("issues a one-time visible mobile access key and persists only its hash", async () => {

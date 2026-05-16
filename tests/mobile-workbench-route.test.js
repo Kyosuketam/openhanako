@@ -46,6 +46,68 @@ describe("mobile workbench route", () => {
     expect(JSON.stringify(data)).not.toContain(workspace);
   });
 
+  it("returns mobile bootstrap metadata for desktop-compatible agent workbench selection", async () => {
+    tmpDir = makeTmpDir();
+    const workspace = path.join(tmpDir, "workspace");
+    fs.mkdirSync(workspace, { recursive: true });
+    const app = await makeApp({
+      hanakoHome: path.join(tmpDir, "hana"),
+      userDir: path.join(tmpDir, "hana", "user"),
+      agentDir: path.join(tmpDir, "hana", "agents", "hana"),
+      deskCwd: workspace,
+      homeCwd: workspace,
+      getLocale: () => "zh-CN",
+      agentName: "Hana",
+      userName: "Owner",
+      currentAgentId: "hana",
+      config: { cwd_history: [workspace] },
+      agent: {
+        config: {
+          agent: { yuan: "hanako" },
+          providers: { openai: { api_key: "secret-key" } },
+        },
+      },
+      listAgents: () => [{
+        id: "hana",
+        name: "Hana",
+        yuan: "hanako",
+        isPrimary: true,
+        hasAvatar: false,
+        homeFolder: workspace,
+        chatModel: { id: "deepseek-chat", provider: "deepseek" },
+      }],
+      getAppearance: () => ({ theme: "warm-paper", serif: true }),
+    });
+
+    const res = await app.request("/api/mobile/bootstrap");
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toMatchObject({
+      locale: "zh-CN",
+      agentName: "Hana",
+      userName: "Owner",
+      currentAgentId: "hana",
+      homeFolder: workspace,
+      cwdHistory: [workspace],
+      appearance: { theme: "warm-paper", serif: true },
+    });
+    expect(data.agents).toEqual([
+      {
+        id: "hana",
+        name: "Hana",
+        yuan: "hanako",
+        isPrimary: true,
+        isCurrent: false,
+        hasAvatar: false,
+        chatModel: { id: "deepseek-chat", provider: "deepseek" },
+        homeFolder: workspace,
+        memoryMasterEnabled: true,
+      },
+    ]);
+    expect(JSON.stringify(data)).not.toContain("secret-key");
+  });
+
   it("serves UTF-8 file content with HEAD and Range support", async () => {
     tmpDir = makeTmpDir();
     const workspace = path.join(tmpDir, "workspace");
@@ -118,5 +180,52 @@ describe("mobile workbench route", () => {
 
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: "invalid_subdir" });
+  });
+
+  it("denies remote mobile writes without files.write scope", async () => {
+    tmpDir = makeTmpDir();
+    const workspace = path.join(tmpDir, "workspace");
+    fs.mkdirSync(workspace, { recursive: true });
+    const app = new Hono();
+    const { createMobileWorkbenchRoute } = await import("../server/routes/mobile-workbench.js");
+    app.use("*", async (c, next) => {
+      c.set("authPrincipal", Object.freeze({
+        kind: "device",
+        credentialKind: "device_credential",
+        connectionKind: "lan",
+        trustState: "lan",
+        serverNodeId: "node_1",
+        userId: "user_1",
+        studioId: "studio_1",
+        deviceId: "device_1",
+        scopes: ["files.read"],
+      }));
+      await next();
+    });
+    app.route("/api", createMobileWorkbenchRoute({
+      hanakoHome: path.join(tmpDir, "hana"),
+      deskCwd: workspace,
+      homeCwd: workspace,
+      getRuntimeContext: () => ({
+        serverId: "server_1",
+        serverNodeId: "node_1",
+        userId: "user_1",
+        studioId: "studio_1",
+        connectionKind: "local",
+        credentialKind: "loopback_token",
+      }),
+    }));
+
+    const res = await app.request("/api/mobile/workbench/actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "writeText", name: "x.md", content: "no" }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      error: "insufficient_scope",
+      capability: "files.write",
+    });
   });
 });

@@ -39,7 +39,16 @@ function safeRelativePath(value) {
   if (!decoded || decoded.includes("\\") || decoded.startsWith("/") || decoded.includes("\0")) return null;
   const parts = decoded.split("/");
   if (parts.some((part) => !part || part === "." || part === "..")) return null;
-  if (parts[0] !== "assets" && parts[0] !== "icons" && decoded !== "manifest.webmanifest" && decoded !== "sw.js") {
+  if (
+    parts[0] !== "assets"
+    && parts[0] !== "icons"
+    && parts[0] !== "lib"
+    && parts[0] !== "themes"
+    && parts[0] !== "locales"
+    && decoded !== "manifest.webmanifest"
+    && decoded !== "sw.js"
+    && decoded !== "icon.png"
+  ) {
     return null;
   }
   return parts.join(path.sep);

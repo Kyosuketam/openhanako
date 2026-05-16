@@ -3,6 +3,8 @@
  *
  * GET  /api/preferences/models  — 读取全局模型 + 搜索配置
  * PUT  /api/preferences/models  — 更新全局模型 + 搜索配置
+ * GET  /api/preferences/appearance  — 读取跨前端外观偏好
+ * PUT  /api/preferences/appearance  — 更新跨前端外观偏好
  * GET  /api/preferences/computer-use  — 读取 Computer Use provider/approval 状态
  * PUT  /api/preferences/computer-use  — 更新 Computer Use 全局设置
  * POST /api/preferences/computer-use/request-permissions — 请求系统权限
@@ -152,6 +154,30 @@ export function createPreferencesRoute(engine, { platform = process.platform } =
     }
   });
 
+  route.get("/preferences/appearance", async (c) => {
+    try {
+      return c.json({ appearance: engine.getAppearance?.() || {} });
+    } catch (err) {
+      return c.json({ error: err.message }, 500);
+    }
+  });
+
+  route.put("/preferences/appearance", async (c) => {
+    try {
+      const body = await safeJson(c);
+      if (!body || typeof body !== "object") {
+        return c.json({ error: "invalid JSON body" }, 400);
+      }
+      const patch = body.appearance && typeof body.appearance === "object" ? body.appearance : body;
+      const before = engine.getAppearance?.() || {};
+      const appearance = engine.setAppearance?.(patch) || {};
+      emitAppearanceEvents(engine, before, appearance);
+      return c.json({ ok: true, appearance });
+    } catch (err) {
+      return c.json({ error: err.message }, 400);
+    }
+  });
+
   route.get("/preferences/workspace-ui-state", async (c) => {
     try {
       const workspace = normalizeWorkspacePath(c.req.query("workspace"));
@@ -294,4 +320,19 @@ export function createPreferencesRoute(engine, { platform = process.platform } =
   });
 
   return route;
+}
+
+function emitAppearanceEvents(engine, before, appearance) {
+  if (appearance.theme && appearance.theme !== before.theme) {
+    emitAppEvent(engine, "theme-changed", { theme: appearance.theme });
+  }
+  if (typeof appearance.serif === "boolean" && appearance.serif !== before.serif) {
+    emitAppEvent(engine, "font-changed", { serif: appearance.serif });
+  }
+  if (typeof appearance.paperTexture === "boolean" && appearance.paperTexture !== before.paperTexture) {
+    emitAppEvent(engine, "paper-texture-changed", { enabled: appearance.paperTexture });
+  }
+  if (typeof appearance.leavesOverlay === "boolean" && appearance.leavesOverlay !== before.leavesOverlay) {
+    emitAppEvent(engine, "leaves-overlay-changed", { enabled: appearance.leavesOverlay });
+  }
 }

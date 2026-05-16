@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { normalizePrincipal } from "./security-principal.js";
 
 export const WEB_SESSIONS_FILE = "web-sessions.json";
 export const WEB_SESSION_COOKIE_NAME = "hana_session";
@@ -157,21 +158,7 @@ function createEmptyRegistry(now) {
 }
 
 function sanitizePrincipal(principal) {
-  return {
-    kind: stringOrNull(principal.kind) || "unknown",
-    credentialKind: stringOrNull(principal.credentialKind),
-    connectionKind: stringOrNull(principal.connectionKind),
-    trustState: stringOrNull(principal.trustState),
-    serverId: stringOrNull(principal.serverId),
-    serverNodeId: stringOrNull(principal.serverNodeId),
-    userId: stringOrNull(principal.userId),
-    studioId: stringOrNull(principal.studioId),
-    deviceId: stringOrNull(principal.deviceId),
-    credentialId: stringOrNull(principal.credentialId),
-    platformAccountId: stringOrNull(principal.platformAccountId),
-    officialServiceKind: stringOrNull(principal.officialServiceKind),
-    scopes: Array.isArray(principal.scopes) ? principal.scopes.filter(isNonEmptyString) : [],
-  };
+  return normalizePrincipal(principal);
 }
 
 function sanitizeSession(session) {

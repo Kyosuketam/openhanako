@@ -7,6 +7,19 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStore } from '../../stores';
 
+const mocks = vi.hoisted(() => ({
+  hanaFetch: vi.fn(async (_path: string, _opts?: RequestInit) => new Response(JSON.stringify({ ok: true }), { status: 200 })),
+  loadModels: vi.fn(),
+}));
+
+vi.mock('../../hooks/use-hana-fetch', () => ({
+  hanaFetch: (path: string, opts?: RequestInit) => mocks.hanaFetch(path, opts),
+}));
+
+vi.mock('../../utils/ui-helpers', () => ({
+  loadModels: () => mocks.loadModels(),
+}));
+
 const translations: Record<string, string | string[] | Record<string, { avatar: string }>> = {
   'input.workspace': '工作台：',
   'input.currentWorkspace': '本次工作台',
@@ -82,5 +95,45 @@ describe('WelcomeScreen workspace picker', () => {
 
     expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(useStore.getState().memoryEnabled).toBe(true);
+  });
+
+  it('selects the target agent workbench when choosing an agent on the welcome screen', async () => {
+    useStore.setState({
+      agents: [
+        {
+          id: 'hana',
+          name: 'Hanako',
+          yuan: 'hanako',
+          isPrimary: true,
+          homeFolder: '/workspace/Hana',
+          chatModel: { id: 'deepseek-chat', provider: 'deepseek' },
+        },
+        {
+          id: 'mio',
+          name: 'Mio',
+          yuan: 'hanako',
+          isPrimary: false,
+          homeFolder: '/workspace/Mio',
+          chatModel: { id: 'gpt-5.2', provider: 'openai' },
+        },
+      ],
+      currentAgentId: 'hana',
+      selectedAgentId: null,
+      selectedFolder: '/workspace/Hana',
+      homeFolder: '/workspace/Hana',
+      workspaceFolders: ['/workspace/Reference'],
+    } as never);
+    const { WelcomeScreen } = await import('../../components/WelcomeScreen');
+
+    render(<WelcomeScreen />);
+    fireEvent.click(screen.getByRole('button', { name: /Mio/ }));
+
+    expect(useStore.getState().selectedAgentId).toBe('mio');
+    expect(useStore.getState().selectedFolder).toBe('/workspace/Mio');
+    expect(useStore.getState().workspaceFolders).toEqual([]);
+    expect(mocks.hanaFetch).toHaveBeenCalledWith('/api/models/set', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ modelId: 'gpt-5.2', provider: 'openai' }),
+    }));
   });
 });

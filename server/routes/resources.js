@@ -25,12 +25,16 @@ export function createResourcesRoute(engine) {
 }
 
 function getResource(engine, resourceId, requestContext) {
+  const access = getResourceAccess(engine);
+  if (access) return access.getMetadata(resourceId, requestContext);
   const options = { requestContext };
   if (typeof engine?.getResource === "function") return engine.getResource(resourceId, options);
   return engine?.resources?.getResource?.(resourceId, options) || null;
 }
 
 function resolveResourceContent(engine, resourceId, requestContext) {
+  const access = getResourceAccess(engine);
+  if (access) return access.resolveContent(resourceId, requestContext);
   const options = { requestContext };
   if (typeof engine?.resolveResourceContent === "function") {
     return engine.resolveResourceContent(resourceId, options);
@@ -42,6 +46,11 @@ function resolveResourceContent(engine, resourceId, requestContext) {
     status: 500,
     code: "resource_service_unavailable",
   });
+}
+
+function getResourceAccess(engine) {
+  if (typeof engine?.getResourceAccessService === "function") return engine.getResourceAccessService();
+  return engine?.resourceAccess || null;
 }
 
 function serveResourceContent(c, engine, headOnly) {

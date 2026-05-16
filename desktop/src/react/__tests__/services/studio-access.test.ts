@@ -127,4 +127,32 @@ describe('trusted space access contract', () => {
     expect(() => validateStudioConnectionTrust(invalidRelay))
       .toThrow('relay connection requires officialServiceKind=relay');
   });
+
+  it('allows LAN browser sessions created by local account login without requiring a platform account', () => {
+    const connection = {
+      ...createLocalServerConnection({
+        serverPort: 3210,
+        serverToken: 'local-token',
+      })!,
+      connectionId: 'lan:browser',
+      kind: 'lan' as const,
+      serverId: 'server_lan',
+      userId: 'local_user',
+      studioId: 'studio_lan',
+      label: 'LAN Studio',
+      baseUrl: 'http://192.168.1.20:14500',
+      wsUrl: 'ws://192.168.1.20:14500',
+      token: null,
+      authState: 'user' as const,
+      trustState: 'lan' as const,
+      credentialKind: 'user_session' as const,
+      capabilities: ['chat', 'resources', 'files'],
+    };
+
+    expect(deriveStudioAccessGrant(connection)).toMatchObject({
+      actorKind: 'account_user',
+      localOnly: false,
+      dataOwner: 'user_server',
+    });
+  });
 });

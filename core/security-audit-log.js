@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { capabilityDecisionSummary } from "./capability-policy.js";
+import { principalSummary } from "./security-principal.js";
 
 export const SECURITY_AUDIT_LOG_FILE = "security-audit.jsonl";
 
@@ -29,16 +31,7 @@ export function buildSecurityAuditActor(principal) {
   if (!principal || typeof principal !== "object") {
     return { kind: "unknown" };
   }
-  return sanitizeObject({
-    kind: principal.kind || "unknown",
-    userId: principal.userId || null,
-    studioId: principal.studioId || null,
-    serverNodeId: principal.serverNodeId || null,
-    connectionKind: principal.connectionKind || null,
-    credentialKind: principal.credentialKind || null,
-    deviceId: principal.deviceId || null,
-    credentialId: principal.credentialId || null,
-  });
+  return sanitizeObject(principalSummary(principal));
 }
 
 function normalizeAuditEvent(event, { now, eventId }) {
@@ -51,6 +44,9 @@ function normalizeAuditEvent(event, { now, eventId }) {
     target: source.target || null,
     result: source.result || "unknown",
     actor: buildSecurityAuditActor(source.actor || source.principal),
+    decision: capabilityDecisionSummary(source.decision) || null,
+    leaseId: source.leaseId || null,
+    errorCode: source.errorCode || null,
     secretFields: normalizeStringArray(source.secretFields),
     metadata: sanitizeObject(source.metadata || {}),
   });

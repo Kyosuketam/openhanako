@@ -112,6 +112,7 @@ describe("sessions route", () => {
     const app = new Hono();
     const cwd = path.join(tmpDir, "main");
     const extra = path.join(tmpDir, "reference");
+    const hub = { eventBus: { emit: vi.fn() } };
 
     const engine = {
       currentAgentId: "hana",
@@ -128,7 +129,7 @@ describe("sessions route", () => {
       getSessionWorkspaceFolders: vi.fn(() => [extra]),
     };
 
-    app.route("/api", createSessionsRoute(engine));
+    app.route("/api", createSessionsRoute(engine, hub));
 
     const res = await app.request("/api/sessions/new", {
       method: "POST",
@@ -146,6 +147,13 @@ describe("sessions route", () => {
       { workspaceFolders: [extra] },
     );
     expect(data.workspaceFolders).toEqual([extra]);
+    expect(hub.eventBus.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "session_created",
+        session: expect.objectContaining({ path: "/tmp/agents/hana/sessions/new.jsonl" }),
+      }),
+      "/tmp/agents/hana/sessions/new.jsonl",
+    );
   });
 
   it("includes pinnedAt in the session list response", async () => {

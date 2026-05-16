@@ -84,6 +84,20 @@ export interface ServerConnectionSource {
 
 const LOCAL_CAPABILITIES = ['chat', 'resources', 'files', 'tools'];
 
+interface BrowserServerConnectionPrincipal {
+  kind?: string | null;
+  credentialKind?: string | null;
+  connectionKind?: string | null;
+  trustState?: string | null;
+  serverId?: string | null;
+  serverNodeId?: string | null;
+  userId?: string | null;
+  studioId?: string | null;
+  platformAccountId?: string | null;
+  officialServiceKind?: string | null;
+  scopes?: string[] | null;
+}
+
 function normalizePort(port: string | number | null | undefined): string | null {
   if (port === null || port === undefined) return null;
   const text = String(port).trim();
@@ -166,6 +180,55 @@ export function createLocalServerConnection({
   };
 }
 
+export function createBrowserServerConnection({
+  identity,
+  principal,
+  origin = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1',
+}: {
+  identity: ServerIdentity;
+  principal?: BrowserServerConnectionPrincipal | null;
+  origin?: string;
+}): ServerConnection {
+  const base = trimTrailingSlash(origin);
+  const parsed = new URL(base);
+  const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProtocol}//${parsed.host}`;
+  const kind = normalizeBrowserConnectionKind(
+    principal?.connectionKind || identity.connectionKind,
+    parsed.hostname,
+  );
+  const credentialKind = normalizeBrowserCredentialKind(principal?.credentialKind, kind);
+  const trustState = normalizeBrowserTrustState(principal?.trustState || identity.trustState, kind);
+  const officialServiceKind = normalizeOfficialServiceKind(identity.officialServiceKind ?? principal?.officialServiceKind);
+  const platformAccountId = identity.platformAccountId ?? principal?.platformAccountId ?? null;
+  const connection: ServerConnection = {
+    connectionId: `browser:${identity.serverId || principal?.serverId || parsed.host}`,
+    kind,
+    serverId: identity.serverId || principal?.serverId || parsed.host,
+    serverNodeId: identity.serverNodeId || principal?.serverNodeId || identity.serverId || principal?.serverId || parsed.host,
+    serverNodeKind: identity.serverNodeKind,
+    serverNodeTransport: identity.serverNodeTransport,
+    userId: principal?.userId || identity.userId,
+    studioId: identity.studioId || principal?.studioId || 'default',
+    label: identity.label || identity.studioLabel || 'Hana Studio',
+    userLabel: identity.userLabel,
+    studioLabel: identity.studioLabel,
+    serverVersion: identity.version,
+    baseUrl: base,
+    wsUrl,
+    token: null,
+    authState: principal?.kind === 'account_user' ? 'user' : (identity.authState || 'paired'),
+    trustState,
+    credentialKind,
+    platformAccountId,
+    officialServiceKind,
+    executionBoundary: identity.executionBoundary,
+    capabilities: normalizeBrowserCapabilities(identity.capabilities, principal?.scopes),
+  };
+  validateStudioConnectionTrust(connection);
+  return connection;
+}
+
 export function refreshLocalServerConnection({
   existingConnection,
   serverPort,
@@ -195,6 +258,63 @@ export function refreshLocalServerConnection({
       ? [...existingConnection.capabilities]
       : [...nextTransport.capabilities],
   };
+}
+
+function normalizeBrowserConnectionKind(
+  value: StudioConnectionKind | string | null | undefined,
+  hostname: string,
+): StudioConnectionKind {
+  if (value === 'local' || value === 'lan' || value === 'custom_remote' || value === 'relay' || value === 'cloud') {
+    if (value === 'local' && !isLoopbackHost(hostname)) return 'lan';
+    return value;
+  }
+  return isLoopbackHost(hostname) ? 'local' : 'lan';
+}
+
+function normalizeBrowserTrustState(
+  value: ServerTrustState | string | null | undefined,
+  kind: StudioConnectionKind,
+): ServerTrustState {
+  if (kind === 'local') return 'local';
+  if (kind === 'lan') return 'lan';
+  if (kind === 'custom_remote' || kind === 'relay') return 'tunnel';
+  if (kind === 'cloud') return 'cloud';
+  if (value === 'local' || value === 'lan' || value === 'tunnel' || value === 'cloud') return value;
+  return 'lan';
+}
+
+function normalizeBrowserCredentialKind(
+  value: string | null | undefined,
+  kind: StudioConnectionKind,
+): ConnectionCredentialKind {
+  if (kind === 'local') return 'loopback_token';
+  if (value === 'password' || value === 'user_session') return 'user_session';
+  if (kind === 'relay' || kind === 'cloud') return 'user_session';
+  return 'device_credential';
+}
+
+function normalizeOfficialServiceKind(value: string | null | undefined): OfficialServiceKind | null {
+  if (value === 'relay' || value === 'cloud_studio' || value === 'inference' || value === 'billing') return value;
+  return null;
+}
+
+function normalizeBrowserCapabilities(
+  identityCapabilities: string[] | null | undefined,
+  scopes: string[] | null | undefined,
+): string[] {
+  const out = new Set(identityCapabilities?.length ? identityCapabilities : LOCAL_CAPABILITIES);
+  for (const scope of scopes || []) {
+    if (scope === 'chat') out.add('chat');
+    else if (scope === 'resources' || scope.startsWith('resources.')) out.add('resources');
+    else if (scope === 'files' || scope.startsWith('files.')) out.add('files');
+    else if (scope === 'tools' || scope.startsWith('tools.')) out.add('tools');
+  }
+  return [...out];
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
 }
 
 export function resolveServerConnection(source: ServerConnectionSource): ServerConnection | null {

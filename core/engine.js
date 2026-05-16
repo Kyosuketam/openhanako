@@ -21,7 +21,9 @@ import { migrateProviderMediaConfig } from "./provider-media-config.js";
 import { runMigrations } from "./migrations.js";
 import { createServerRuntimeContext } from "./server-runtime-context.js";
 import { createRuntimeExecutionBoundary } from "./execution-boundary.js";
+import { ResourceAccessService } from "./resource-access-service.js";
 import { ResourceService } from "./resource-service.js";
+import { appendSecurityAuditEvent } from "./security-audit-log.js";
 import { findModel } from "../shared/model-ref.js";
 import { resolveWorkspaceSkillPaths } from "../shared/workspace-skill-paths.js";
 import { resolveHanaPiAgentDir, resolveHanaPiProjectDir } from "../shared/hana-runtime-paths.js";
@@ -145,6 +147,7 @@ export class HanaEngine {
     this.appVersion = appVersion || "0.0.0";
     this._runtimeContext = null;
     this._resources = null;
+    this._resourceAccess = null;
     this.agentsDir = path.join(hanakoHome, "agents");
     this.userDir = path.join(hanakoHome, "user");
     this.channelsDir = path.join(hanakoHome, "channels");
@@ -403,6 +406,10 @@ export class HanaEngine {
   getResourceService() {
     if (!this._resources) throw new Error("resource service is not initialized");
     return this._resources;
+  }
+  getResourceAccessService() {
+    if (!this._resourceAccess) throw new Error("resource access service is not initialized");
+    return this._resourceAccess;
   }
   getResource(resourceId) { return this.getResourceService().getResource(resourceId); }
   resolveResourceContent(resourceId) { return this.getResourceService().resolveContent(resourceId); }
@@ -721,6 +728,8 @@ export class HanaEngine {
   setLocale(l) { this._prefs.setLocale(l); }
   getEditor() { return this._prefs.getEditor(); }
   setEditor(p) { return this._prefs.setEditor(p); }
+  getAppearance() { return this._prefs.getAppearance(); }
+  setAppearance(p) { return this._prefs.setAppearance(p); }
   getWorkspaceUiState(workspaceRoot) { return this._prefs.getWorkspaceUiState(workspaceRoot); }
   setWorkspaceUiState(workspaceRoot, state) { return this._prefs.setWorkspaceUiState(workspaceRoot, state); }
   getPluginUiPrefs() { return this._prefs.getPluginUiPrefs(); }
@@ -983,6 +992,10 @@ export class HanaEngine {
       agentsDir: this.agentsDir,
       sessionFiles: this._sessionFiles,
       runtimeContext: this._runtimeContext,
+    });
+    this._resourceAccess = new ResourceAccessService({
+      resourceService: this._resources,
+      audit: (event) => appendSecurityAuditEvent(this.hanakoHome, event),
     });
 
     // 频道初始化和 agent 构造会调用 server-side i18n。locale 是 global

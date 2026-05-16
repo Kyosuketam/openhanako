@@ -166,7 +166,12 @@ const serverNetwork = resolveServerListenOptions(hanakoHome);
 const serverRuntimeState = {
   mode: serverNetwork.mode,
   listenHost: serverNetwork.host,
+  bindHost: "0.0.0.0",
   actualPort: null,
+  applyNetworkConfig(network) {
+    this.mode = network.mode;
+    this.listenHost = network.listenHost;
+  },
 };
 
 // ── 创建 Hono 实例 ──
@@ -191,7 +196,7 @@ app.use("*", async (c, next) => {
   const transport = inferHttpConnectionKind({
     hostHeader: c.req.header("host"),
     remoteAddress: c.env?.incoming?.socket?.remoteAddress,
-    networkMode: serverNetwork.mode,
+    networkMode: serverRuntimeState.mode,
   });
   if (!transport.connectionKind) {
     return c.json({ error: "invalid_transport", detail: transport.reason }, 403);
@@ -434,7 +439,7 @@ app.route("/api", createAccessRoute({
   engine,
   runtimeState: serverRuntimeState,
 }));
-app.route("/api", createSessionsRoute(engine));
+app.route("/api", createSessionsRoute(engine, hub));
 app.route("/api", createModelsRoute(engine));
 app.route("/api", createConfigRoute(engine));
 app.route("/api", createUploadRoute(engine));
@@ -586,7 +591,7 @@ app.post("/api/shutdown", async (c) => {
 // ── 启动服务器 ──
 const envPort = Number.parseInt(process.env.HANA_PORT || "", 10);
 const port = Number.isInteger(envPort) && envPort >= 0 ? envPort : serverNetwork.port;
-const host = serverNetwork.host;
+const host = serverRuntimeState.bindHost;
 
 let server;
 try {
@@ -631,7 +636,7 @@ try {
     const transport = inferHttpConnectionKind({
       hostHeader: req.headers.host,
       remoteAddress: req.socket?.remoteAddress,
-      networkMode: serverNetwork.mode,
+      networkMode: serverRuntimeState.mode,
     });
     if (!transport.connectionKind) {
       socket.destroy();
@@ -731,7 +736,8 @@ try {
       pid: process.pid,
       port: actualPort,
       host,
-      networkMode: serverNetwork.mode,
+      configuredHost: serverRuntimeState.listenHost,
+      networkMode: serverRuntimeState.mode,
       token: SERVER_TOKEN,
       version: appVersion,
     }));

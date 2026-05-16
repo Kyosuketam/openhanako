@@ -44,9 +44,11 @@ import { applyStreamingStatus, configureWsMessageHandler, handleServerMessage } 
 import { dispatchStreamKey } from '../../services/stream-key-dispatcher';
 import { handleAppEvent } from '../../services/app-event-actions';
 import { clearMessageLiveVersion, readMessageLiveVersion } from '../../stores/message-live-version';
+import { loadSessions } from '../../stores/session-actions';
 
 describe('ws-message-handler applyStreamingStatus', () => {
   beforeEach(() => {
+    vi.mocked(loadSessions).mockClear();
     useStore.setState({
       currentSessionPath: '/focused.jsonl',
       pendingNewSession: false,
@@ -130,6 +132,16 @@ describe('ws-message-handler session-scoped desktop events', () => {
     expect(first.data.text).toBe('hello from bridge');
     expect(first.data.quotedText).toBe('quote');
     expect(first.data.attachments).toEqual([{ path: '/tmp/a.png', name: 'a.png', isDir: false }]);
+  });
+
+  it('session_created 触发桌面端刷新 session 列表', () => {
+    handleServerMessage({
+      type: 'session_created',
+      sessionPath: '/session/new.jsonl',
+      session: { path: '/session/new.jsonl' },
+    });
+
+    expect(loadSessions).toHaveBeenCalledTimes(1);
   });
 
   it('stream replay 中的 session_user_message 若已由历史加载存在，不重复追加', () => {

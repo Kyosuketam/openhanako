@@ -25,6 +25,7 @@ describe('expired session file presentation', () => {
       'chat.fileActions.more': '更多文件操作',
       'chat.fileActions.revealInFinder': '打开文件夹',
       'chat.fileActions.copyPath': '复制文件路径',
+      'chat.fileActions.downloadToDevice': '下载到本机',
     };
     window.t = ((key: string) => tMap[key] || key) as typeof window.t;
     window.platform = {
@@ -215,5 +216,77 @@ describe('expired session file presentation', () => {
       'src',
       'https://hana.example/api/resources/res_sf_img/content',
     );
+  });
+
+  it('renders a phone-download action for staged file cards backed by a resource URL', () => {
+    delete (window as any).platform;
+    useStore.setState({
+      activeServerConnection: {
+        kind: 'lan',
+        serverId: 'server_lan',
+        userId: 'user_lan',
+        studioId: 'studio_lan',
+        label: 'LAN Hana',
+        baseUrl: 'http://hana.local:14500',
+        wsUrl: 'ws://hana.local:14500',
+        token: null,
+        authState: 'paired',
+        trustState: 'lan',
+        credentialKind: 'device_credential',
+        platformAccountId: null,
+        officialServiceKind: null,
+        capabilities: ['resources', 'files'],
+      },
+      sessionRegistryFilesByPath: {
+        '/sessions/main.jsonl': [{
+          fileId: 'sf_demo',
+          filePath: '/remote/cache/demo.pdf',
+          label: 'demo.pdf',
+          ext: 'pdf',
+          status: 'available',
+          resource: {
+            schemaVersion: 1,
+            resourceId: 'res_sf_demo',
+            name: 'studios/studio_lan/resources/res_sf_demo',
+            studioId: 'studio_lan',
+            type: 'file',
+            source: 'session_file',
+            fileId: 'sf_demo',
+            lifecycle: { status: 'available', missingAt: null },
+            storage: { provider: 'session_file', localOnly: true },
+            links: {
+              self: '/api/resources/res_sf_demo',
+              content: '/api/resources/res_sf_demo/content',
+            },
+          },
+        }],
+      },
+    } as any);
+
+    render(
+      <AssistantMessage
+        showAvatar={false}
+        sessionPath="/sessions/main.jsonl"
+        readOnly
+        message={{
+          id: 'a-download',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'file',
+              fileId: 'sf_demo',
+              filePath: '/remote/cache/demo.pdf',
+              label: 'demo.pdf',
+              ext: 'pdf',
+              status: 'available',
+            },
+          ],
+        }}
+      />,
+    );
+
+    const download = screen.getByRole('link', { name: '下载到本机 demo.pdf' });
+    expect(download).toHaveAttribute('href', 'http://hana.local:14500/api/resources/res_sf_demo/content');
+    expect(download).toHaveAttribute('download', 'demo.pdf');
   });
 });

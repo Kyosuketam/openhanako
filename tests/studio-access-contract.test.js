@@ -108,4 +108,27 @@ describe("shared trusted studio access contract", () => {
       "files.write",
     ]);
   });
+
+  it("treats local account browser sessions on LAN as user-owned account access, not platform account access", () => {
+    const lanAccount = localConnection({
+      connectionId: "lan:browser-session",
+      kind: "lan",
+      serverId: "server_lan",
+      userId: "local_account_user",
+      studioId: "studio_lan",
+      baseUrl: "http://192.168.1.20:14500",
+      wsUrl: "ws://192.168.1.20:14500",
+      token: null,
+      authState: "user",
+      trustState: "lan",
+      credentialKind: "user_session",
+      capabilities: ["chat", "resources", "files"],
+    });
+
+    expect(deriveStudioAccessGrant(lanAccount)).toMatchObject({
+      actorKind: "account_user",
+      localOnly: false,
+      dataOwner: "user_server",
+    });
+  });
 });

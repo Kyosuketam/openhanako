@@ -1,8 +1,10 @@
+import { principalHasScope as principalHasNormalizedScope } from "../../core/security-principal.js";
 import { isLocalOwnerPrincipal, scopeAllows } from "./route-security.js";
 
 export function principalHasScope(principal, scope) {
   if (isLocalOwnerPrincipal(principal)) return true;
   if (!principal || typeof principal !== "object") return false;
+  if (principal.principalId) return principalHasNormalizedScope(principal, scope);
   const scopes = Array.isArray(principal.scopes) ? principal.scopes : [];
   return scopeAllows(scopes, scope);
 }

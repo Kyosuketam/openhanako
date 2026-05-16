@@ -168,7 +168,8 @@
     "fileActions": {
       "more": "その他のファイル操作",
       "revealInFinder": "ファイルマネージャーで表示",
-      "copyPath": "ファイルパスをコピー"
+      "copyPath": "ファイルパスをコピー",
+      "downloadToDevice": "この端末にダウンロード"
     }
   },
   "time": {
@@ -803,7 +804,7 @@
       "mobileUrlLocalHint": "現在はこのコンピューターだけが接続できます",
       "qrCode": "QR コード",
       "qrCodeHint": "スキャンして PWA を開きます",
-      "restartRequired": "ネットワーク設定を保存しました。Hana を再起動すると反映されます",
+      "restartRequired": "ポートの変更を保存しました。Hana を再起動すると反映されます",
       "saveNetwork": "アクセス設定を保存",
       "mobileKeys": "モバイルキー",
       "generateMobileKey": "モバイルアクセスキーを生成",

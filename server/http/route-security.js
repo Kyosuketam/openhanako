@@ -38,6 +38,16 @@ export function classifyHttpRoute({ method = "GET", path = "" } = {}) {
   if (routePath === "/api/server/identity") return AUTHENTICATED_ONLY;
 
   if (routePath === "/ws") return scoped("chat");
+  if (routePath === "/api/mobile/bootstrap") {
+    return verb === "GET" ? scoped("chat") : LOCAL_ONLY;
+  }
+  if (
+    routePath === "/api/avatar/agent"
+    || routePath === "/api/avatar/user"
+    || /^\/api\/agents\/[^/]+\/avatar$/.test(routePath)
+  ) {
+    return verb === "GET" ? scoped("chat") : LOCAL_ONLY;
+  }
   if (routePath === "/api/mobile/workbench/files" || routePath === "/api/mobile/workbench/search") {
     return verb === "GET" ? scoped("files.read") : LOCAL_ONLY;
   }
@@ -50,6 +60,13 @@ export function classifyHttpRoute({ method = "GET", path = "" } = {}) {
   ) {
     return verb === "POST" ? scoped("files.write") : LOCAL_ONLY;
   }
+  if (routePath === "/api/preferences/workspace-ui-state") {
+    if (verb === "GET") return scoped("files.read");
+    if (verb === "PUT") return scoped("files.write");
+    return LOCAL_ONLY;
+  }
+  if (isDeskFileReadRoute(verb, routePath)) return scoped("files.read");
+  if (isDeskFileWriteRoute(verb, routePath)) return scoped("files.write");
   if (isSettingsReadRoute(verb, routePath)) return scoped("settings.read");
   if (isSettingsWriteRoute(verb, routePath)) return scoped("settings.write");
   if (isProviderManagementRoute(verb, routePath)) return scoped("providers.manage");
@@ -60,6 +77,24 @@ export function classifyHttpRoute({ method = "GET", path = "" } = {}) {
   }
   if (routePath === "/api/sessions" || routePath.startsWith("/api/sessions/")) {
     return scoped("chat");
+  }
+  if (routePath === "/api/models") {
+    return verb === "GET" ? scoped("chat") : LOCAL_ONLY;
+  }
+  if (routePath === "/api/models/set" || routePath === "/api/models/switch") {
+    return verb === "POST" ? scoped("chat") : LOCAL_ONLY;
+  }
+  if (routePath === "/api/session-permission-mode") {
+    return (verb === "GET" || verb === "POST") ? scoped("chat") : LOCAL_ONLY;
+  }
+  if (routePath === "/api/session-thinking-level") {
+    return verb === "POST" ? scoped("chat") : LOCAL_ONLY;
+  }
+  if (routePath === "/api/browser/session-states") {
+    return verb === "GET" ? scoped("chat") : LOCAL_ONLY;
+  }
+  if (routePath === "/api/upload-blob") {
+    return verb === "POST" ? scoped("files.write") : LOCAL_ONLY;
   }
   if (routePath === "/api/chat" || routePath.startsWith("/api/chat/")) {
     return scoped("chat");
@@ -123,7 +158,11 @@ function isMobileStaticRoute(verb, routePath) {
     || routePath === "/mobile/index.html"
     || routePath === "/mobile/manifest.webmanifest"
     || routePath === "/mobile/sw.js"
+    || routePath === "/mobile/icon.png"
     || routePath.startsWith("/mobile/assets/")
+    || routePath.startsWith("/mobile/lib/")
+    || routePath.startsWith("/mobile/themes/")
+    || routePath.startsWith("/mobile/locales/")
     || routePath.startsWith("/mobile/icons/");
 }
 
@@ -139,14 +178,30 @@ function isSettingsReadRoute(verb, routePath) {
   return routePath === "/api/config"
     || routePath === "/api/providers/summary"
     || routePath === "/api/preferences/models"
+    || routePath === "/api/preferences/appearance"
     || routePath === "/api/bridge/status"
     || /^\/api\/agents\/[^/]+\/config$/.test(routePath);
+}
+
+function isDeskFileReadRoute(verb, routePath) {
+  if (verb !== "GET") return false;
+  return routePath === "/api/desk/path"
+    || routePath === "/api/desk/files"
+    || routePath === "/api/desk/search-files"
+    || routePath === "/api/desk/jian";
+}
+
+function isDeskFileWriteRoute(verb, routePath) {
+  if (verb !== "POST") return false;
+  return routePath === "/api/desk/files"
+    || routePath === "/api/desk/jian";
 }
 
 function isSettingsWriteRoute(verb, routePath) {
   return (verb === "PUT" && (
     routePath === "/api/config"
     || routePath === "/api/preferences/models"
+    || routePath === "/api/preferences/appearance"
     || /^\/api\/agents\/[^/]+\/config$/.test(routePath)
   ));
 }

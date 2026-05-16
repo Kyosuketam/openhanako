@@ -23,6 +23,7 @@ import { configureAppEventActions, handleAppEvent, readConfigCwdHistory, readCon
 import { configureWsMessageHandler } from './services/ws-message-handler';
 import { applyEditorTypography } from './editor/typography';
 import { createLocalServerConnection, hasServerConnection, mergeServerIdentity, upsertServerConnection } from './services/server-connection';
+import { persistAppearancePreferences } from './services/appearance-sync';
 // @ts-expect-error — shared JS module
 import { errorBus as _errorBus } from '../../../shared/error-bus.js';
 // @ts-expect-error — shared JS module
@@ -104,6 +105,10 @@ export async function initApp(): Promise<void> {
     platform.appReady();
     return;
   }
+
+  persistAppearancePreferences().catch((err) => {
+    console.warn('[init] appearance preference sync skipped:', err);
+  });
 
   // 2. 并行获取 health + config
   try {

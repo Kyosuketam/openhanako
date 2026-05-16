@@ -216,6 +216,7 @@ export class AgentManager {
           identity,
           hasAvatar,
           chatModel,
+          homeFolder: cfg.desk?.home_folder || null,
           memoryMasterEnabled: cfg.memory?.enabled !== false,
         });
       } catch {}

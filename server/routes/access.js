@@ -39,7 +39,11 @@ export function createAccessRoute({
     const denied = requireLocalOwner(c);
     if (denied) return denied;
     const summary = createAccessSummary(engine, runtimeState, listLanAddresses);
-    const url = summary.network.lanMobileUrl || summary.network.localMobileUrl;
+    const port = normalizeQrPort(c.req.query("port"), summary.network.actualPort);
+    const url = buildLanMobileUrl(summary.network.lanAddresses, port);
+    if (!url) {
+      return c.json({ error: "lan_address_unavailable" }, 400);
+    }
     const svg = await QRCode.toString(url, {
       type: "svg",
       margin: 1,
@@ -65,6 +69,12 @@ export function createAccessRoute({
         listenHost,
         listenPort,
       }, { now: now() });
+      if (typeof runtimeState.applyNetworkConfig === "function") {
+        runtimeState.applyNetworkConfig(network);
+      } else {
+        runtimeState.mode = network.mode;
+        runtimeState.listenHost = network.listenHost;
+      }
       recordSecurityAuditEvent(c, engine, {
         action: "access.network.update",
         target: "server-network",
@@ -196,6 +206,7 @@ function createNetworkSummary(network, runtimeState, listLanAddresses) {
   const runtimeHost = runtimeState?.listenHost || network.listenHost;
   const lanAddresses = listLanAddresses();
   const localMobileUrl = buildMobileUrl("127.0.0.1", actualPort);
+  const candidateLanMobileUrl = buildLanMobileUrl(lanAddresses, network.listenPort);
   const lanMobileUrl = network.mode === "lan" && lanAddresses.length > 0
     ? buildMobileUrl(lanAddresses[0], actualPort)
     : null;
@@ -211,12 +222,18 @@ function createNetworkSummary(network, runtimeState, listLanAddresses) {
       || actualPort !== network.listenPort,
     lanAddresses,
     localMobileUrl,
+    candidateLanMobileUrl,
     lanMobileUrl,
   };
 }
 
 function buildMobileUrl(host, port) {
   return `http://${host}:${port}/mobile/`;
+}
+
+function buildLanMobileUrl(lanAddresses, port) {
+  const host = Array.isArray(lanAddresses) ? lanAddresses[0] : null;
+  return host ? buildMobileUrl(host, port) : null;
 }
 
 function requireLocalOwner(c) {
@@ -247,6 +264,11 @@ function normalizePort(value) {
     throw new Error("listenPort must be between 1024 and 65535");
   }
   return port;
+}
+
+function normalizeQrPort(value, fallback) {
+  if (value === undefined || value === null || value === "") return fallback;
+  return normalizePort(value);
 }
 
 function normalizeDisplayName(value, fallback) {

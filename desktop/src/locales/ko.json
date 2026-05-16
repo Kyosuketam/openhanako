@@ -168,7 +168,8 @@
     "fileActions": {
       "more": "파일 작업 더 보기",
       "revealInFinder": "파일 관리자에서 보기",
-      "copyPath": "파일 경로 복사"
+      "copyPath": "파일 경로 복사",
+      "downloadToDevice": "이 기기에 다운로드"
     }
   },
   "time": {
@@ -803,7 +804,7 @@
       "mobileUrlLocalHint": "현재는 이 컴퓨터에서만 접속할 수 있어요",
       "qrCode": "QR 코드",
       "qrCodeHint": "스캔해서 PWA를 엽니다",
-      "restartRequired": "네트워크 설정을 저장했습니다. Hana를 다시 시작하면 적용됩니다",
+      "restartRequired": "포트 변경을 저장했습니다. Hana를 다시 시작하면 적용됩니다",
       "saveNetwork": "접근 설정 저장",
       "mobileKeys": "모바일 키",
       "generateMobileKey": "모바일 접근 키 생성",

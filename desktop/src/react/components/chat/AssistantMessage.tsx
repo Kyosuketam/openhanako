@@ -208,7 +208,7 @@ const ImageOutputCard = memo(function ImageOutputCard({ fileId, filePath, label,
   const imageSrc = useStore(useCallback((state) => {
     const files = selectSessionFiles(state, ctx.sessionPath);
     const ref = files.find(file => (fileId && file.fileId === fileId) || file.path === filePath)
-      ?? buildFallbackImageRef({ fileId, filePath, label: displayName, ext, ctx });
+      ?? buildFallbackSessionFileRef({ fileId, filePath, label: displayName, ext, kind: ext.toLowerCase() === 'svg' ? 'svg' : 'image', ctx });
     try {
       return resolveFileRefUrl(ref, {
         connection: resolveServerConnection(state),
@@ -218,6 +218,14 @@ const ImageOutputCard = memo(function ImageOutputCard({ fileId, filePath, label,
       return '';
     }
   }, [ctx, displayName, ext, fileId, filePath]));
+  const downloadUrl = useSessionFileDownloadUrl({
+    fileId,
+    filePath,
+    label: displayName,
+    ext,
+    kind: ext.toLowerCase() === 'svg' ? 'svg' : 'image',
+    ctx,
+  });
 
   if (status === 'expired') return <FileOutputCard filePath={filePath} label={label} ext={ext} status={status} ctx={ctx} />;
   if (failed) return <FileOutputCard filePath={filePath} label={label} ext={ext} status={status} ctx={ctx} />;
@@ -234,6 +242,18 @@ const ImageOutputCard = memo(function ImageOutputCard({ fileId, filePath, label,
       })}
       style={{ cursor: 'pointer' }}
     >
+      {downloadUrl && (
+        <a
+          className={styles.imageOutputDownloadButton}
+          href={downloadUrl}
+          download={displayName}
+          aria-label={`${window.t('chat.fileActions.downloadToDevice')} ${displayName}`}
+          title={window.t('chat.fileActions.downloadToDevice')}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <DownloadGlyph />
+        </a>
+      )}
       <img
         src={imageSrc}
         alt={displayName}
@@ -245,17 +265,29 @@ const ImageOutputCard = memo(function ImageOutputCard({ fileId, filePath, label,
   );
 });
 
-function buildFallbackImageRef({
+function DownloadGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3v12" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M5 21h14" />
+    </svg>
+  );
+}
+
+function buildFallbackSessionFileRef({
   fileId,
   filePath,
   label,
   ext,
+  kind,
   ctx,
 }: {
   fileId?: string;
   filePath: string;
   label: string;
   ext: string;
+  kind: FileRef['kind'];
   ctx: FileBlockCtx;
 }): FileRef {
   return {
@@ -267,7 +299,7 @@ function buildFallbackImageRef({
       path: filePath,
     }),
     fileId,
-    kind: ext.toLowerCase() === 'svg' ? 'svg' : 'image',
+    kind,
     source: 'session-block-file',
     name: label,
     path: filePath,
@@ -280,6 +312,15 @@ function buildFallbackImageRef({
 const FileOutputCard = memo(function FileOutputCard({ fileId, filePath, label, ext, status, ctx }: { fileId?: string; filePath: string; label: string; ext: string; status?: string; ctx: FileBlockCtx }) {
   const expired = status === 'expired';
   const expiredLabel = window.t('chat.fileExpired');
+  const displayName = label || filePath.split('/').pop() || filePath;
+  const downloadUrl = useSessionFileDownloadUrl({
+    fileId,
+    filePath,
+    label: displayName,
+    ext,
+    kind: 'other',
+    ctx,
+  });
   const handlePreview = () => {
     if (expired) return;
     openFilePreview(filePath, label, ext, {
@@ -291,7 +332,6 @@ const FileOutputCard = memo(function FileOutputCard({ fileId, filePath, label, e
     });
   };
 
-  const displayName = label || filePath.split('/').pop() || filePath;
   const typeLabel = expired ? expiredLabel : (EXT_LABELS[ext] || ext.toUpperCase());
 
   return (
@@ -314,11 +354,50 @@ const FileOutputCard = memo(function FileOutputCard({ fileId, filePath, label, e
         </div>
       </div>
       {!expired && (
-        <FileOutputActions filePath={filePath} displayName={displayName} />
+        <FileOutputActions
+          filePath={filePath}
+          displayName={displayName}
+          downloadUrl={downloadUrl}
+          downloadName={displayName}
+        />
       )}
     </div>
   );
 });
+
+function useSessionFileDownloadUrl({
+  fileId,
+  filePath,
+  label,
+  ext,
+  kind,
+  ctx,
+}: {
+  fileId?: string;
+  filePath: string;
+  label: string;
+  ext: string;
+  kind: FileRef['kind'];
+  ctx: FileBlockCtx;
+}): string | null {
+  return useStore(useCallback((state) => {
+    const files = selectSessionFiles(state, ctx.sessionPath);
+    const ref = files.find(file => (fileId && file.fileId === fileId) || file.path === filePath)
+      ?? buildFallbackSessionFileRef({ fileId, filePath, label, ext, kind, ctx });
+    if (ref.status === 'expired') return null;
+    try {
+      const resolved = resolveFileRefUrl(ref, {
+        connection: resolveServerConnection(state),
+        platform: typeof window !== 'undefined' ? window.platform : null,
+        preferLocalFile: false,
+      });
+      if (resolved.mode === 'local-file') return null;
+      return resolved.url;
+    } catch {
+      return null;
+    }
+  }, [ctx, ext, fileId, filePath, kind, label]));
+}
 
 const FileBlock = memo(function FileBlock({ block, sessionPath, messageId, blockIdx }: {
   block: any;

@@ -270,6 +270,22 @@ export class PreferencesManager {
     return prefs.editor;
   }
 
+  /** 读取跨前端同步的外观偏好。 */
+  getAppearance() {
+    return normalizeAppearance(this._cache.appearance || {});
+  }
+
+  /** 合并写入跨前端同步的外观偏好。 */
+  setAppearance(partial) {
+    const prefs = this._mutableCopy();
+    prefs.appearance = normalizeAppearance({
+      ...(prefs.appearance || {}),
+      ...(partial || {}),
+    });
+    this.savePreferences(prefs);
+    return prefs.appearance;
+  }
+
   /** 读取指定工作区的 UI 状态（文件夹展开、预览 tabs 等）。 */
   getWorkspaceUiState(workspaceRoot) {
     const workspace = normalizeWorkspacePath(workspaceRoot);
@@ -486,4 +502,14 @@ function normalizeBridgeMediaPublicBaseUrl(value) {
     throw new Error("bridge media public base URL must not include query or hash");
   }
   return raw.replace(/\/+$/, "");
+}
+
+function normalizeAppearance(value) {
+  const src = value && typeof value === "object" ? value : {};
+  const out = {};
+  if (typeof src.theme === "string" && src.theme.trim()) out.theme = src.theme.trim();
+  if (typeof src.serif === "boolean") out.serif = src.serif;
+  if (typeof src.paperTexture === "boolean") out.paperTexture = src.paperTexture;
+  if (typeof src.leavesOverlay === "boolean") out.leavesOverlay = src.leavesOverlay;
+  return out;
 }

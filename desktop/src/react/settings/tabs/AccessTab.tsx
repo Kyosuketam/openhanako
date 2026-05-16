@@ -20,6 +20,7 @@ interface AccessSummary {
     restartRequired: boolean;
     lanAddresses: string[];
     localMobileUrl: string;
+    candidateLanMobileUrl: string | null;
     lanMobileUrl: string | null;
   };
   account: {
@@ -79,12 +80,24 @@ export function AccessTab() {
 
   const mobileUrl = useMemo(() => {
     if (!summary) return '';
-    return mode === 'lan'
-      ? (summary.network.lanMobileUrl || summary.network.localMobileUrl)
-      : summary.network.localMobileUrl;
-  }, [mode, summary]);
+    if (mode !== 'lan') return '';
+    const listenPort = Number(port);
+    if (!Number.isInteger(listenPort) || listenPort < 1024 || listenPort > 65535) return '';
+    if (summary.network.lanAddresses[0]) {
+      return `http://${summary.network.lanAddresses[0]}:${listenPort}/mobile/`;
+    }
+    return summary.network.candidateLanMobileUrl || summary.network.lanMobileUrl || '';
+  }, [mode, port, summary]);
 
-  const qrUrl = useMemo(() => hanaUrl('/api/access/mobile-qr.svg'), []);
+  const qrUrl = useMemo(() => {
+    if (mode !== 'lan' || !mobileUrl) return '';
+    const listenPort = Number(port);
+    const query = Number.isInteger(listenPort) ? `?port=${encodeURIComponent(String(listenPort))}` : '';
+    return hanaUrl(`/api/access/mobile-qr.svg${query}`);
+  }, [mode, mobileUrl, port]);
+
+  const canCopyMobileUrl = mobileUrl.length > 0;
+  const canShowQr = mode === 'lan' && mobileUrl.length > 0;
 
   const copyText = useCallback(async (value: string) => {
     if (!value) return;
@@ -92,9 +105,9 @@ export function AccessTab() {
     showToast(t('settings.access.copied'), 'success');
   }, [showToast]);
 
-  const saveNetwork = useCallback(async () => {
-    const listenPort = Number(port);
-    if (!Number.isInteger(listenPort)) {
+  const saveNetworkSettings = useCallback(async (nextMode: AccessMode, nextPort: string) => {
+    const listenPort = Number(nextPort);
+    if (!Number.isInteger(listenPort) || listenPort < 1024 || listenPort > 65535) {
       showToast(t('settings.access.invalidPort'), 'error');
       return;
     }
@@ -103,17 +116,30 @@ export function AccessTab() {
       const res = await hanaFetch('/api/access/network', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, listenPort }),
+        body: JSON.stringify({ mode: nextMode, listenPort }),
       });
       const data = await res.json();
       setSummary(prev => prev ? { ...prev, network: data.network } : prev);
+      setMode(data.network.mode);
+      setPort(String(data.network.configuredPort));
       showToast(t('settings.access.saved'), 'success');
     } catch (err: any) {
       showToast(`${t('settings.saveFailed')}: ${err.message}`, 'error');
+      setMode(summary?.network.mode || nextMode);
     } finally {
       setSavingNetwork(false);
     }
-  }, [mode, port, showToast]);
+  }, [showToast, summary?.network.mode]);
+
+  const saveNetwork = useCallback(async () => {
+    await saveNetworkSettings(mode, port);
+  }, [mode, port, saveNetworkSettings]);
+
+  const handleLanToggle = useCallback((on: boolean) => {
+    const nextMode = on ? 'lan' : 'loopback';
+    setMode(nextMode);
+    void saveNetworkSettings(nextMode, port);
+  }, [port, saveNetworkSettings]);
 
   const generateMobileKey = useCallback(async () => {
     setGenerating(true);
@@ -186,7 +212,7 @@ export function AccessTab() {
         <SettingsRow
           label={t('settings.access.lanToggle')}
           hint={t('settings.access.lanHint')}
-          control={<Toggle label={t('settings.access.lanToggle')} on={mode === 'lan'} onChange={(on) => setMode(on ? 'lan' : 'loopback')} />}
+          control={<Toggle label={t('settings.access.lanToggle')} on={mode === 'lan'} onChange={handleLanToggle} />}
         />
         <SettingsRow
           label={t('settings.access.port')}
@@ -207,13 +233,18 @@ export function AccessTab() {
           control={
             <div className={styles['access-url-row']}>
               <input className={styles['settings-input']} value={mobileUrl} readOnly />
-              <button className={styles['settings-btn-secondary']} type="button" onClick={() => copyText(mobileUrl)}>
+              <button
+                className={styles['settings-btn-secondary']}
+                type="button"
+                onClick={() => copyText(mobileUrl)}
+                disabled={!canCopyMobileUrl}
+              >
                 {t('settings.access.copy')}
               </button>
             </div>
           }
         />
-        {mode === 'lan' && (
+        {canShowQr && (
           <SettingsRow
             label={t('settings.access.qrCode')}
             hint={t('settings.access.qrCodeHint')}

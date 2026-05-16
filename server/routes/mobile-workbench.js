@@ -4,6 +4,8 @@ import path from "path";
 import { Hono } from "hono";
 import { safeJson } from "../hono-helpers.js";
 import { serveFileContent } from "../http/file-content.js";
+import { createRequestContext } from "../http/boundary.js";
+import { recordSecurityAuditEvent } from "../http/security-audit.js";
 import { realPath } from "../utils/path-security.js";
 
 const SEARCH_SKIP_DIRS = new Set([
@@ -23,7 +25,25 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 export function createMobileWorkbenchRoute(engine) {
   const route = new Hono();
 
+  route.get("/mobile/bootstrap", (c) => {
+    return c.json({
+      locale: engine.getLocale?.() || engine.config?.locale || "zh-CN",
+      agentName: engine.agentName || "Hanako",
+      userName: engine.userName || "User",
+      currentAgentId: engine.currentAgentId || null,
+      agentYuan: engine.agent?.config?.agent?.yuan || "hanako",
+      homeFolder: engine.homeCwd || null,
+      cwdHistory: Array.isArray(engine.config?.cwd_history) ? engine.config.cwd_history : [],
+      memoryMasterEnabled: engine.agent?.memoryMasterEnabled !== false,
+      avatars: readAvatarAvailability(engine),
+      agents: typeof engine.listAgents === "function" ? sanitizeAgents(engine.listAgents()) : [],
+      appearance: engine.getAppearance?.() || {},
+    });
+  });
+
   route.get("/mobile/workbench/files", async (c) => {
+    const auth = authorizeWorkbench(c, engine, "files.read");
+    if (auth.response) return auth.response;
     const root = resolveRoot(engine, c.req.query("rootId"));
     const subdir = normalizeSubdirOrError(c.req.query("subdir") || "");
     if (subdir.error) return c.json({ error: subdir.error }, 400);
@@ -37,6 +57,8 @@ export function createMobileWorkbenchRoute(engine) {
   });
 
   route.get("/mobile/workbench/search", async (c) => {
+    const auth = authorizeWorkbench(c, engine, "files.read");
+    if (auth.response) return auth.response;
     const root = resolveRoot(engine, c.req.query("rootId"));
     const q = String(c.req.query("q") || "").trim();
     if (!q) return c.json({ rootId: root.id, query: "", results: [] });
@@ -51,6 +73,8 @@ export function createMobileWorkbenchRoute(engine) {
   route.on("HEAD", "/mobile/workbench/content", (c) => serveContent(c, engine, true));
 
   route.post("/mobile/workbench/actions", async (c) => {
+    const auth = authorizeWorkbench(c, engine, "files.write");
+    if (auth.response) return auth.response;
     const body = await safeJson(c);
     const root = resolveRoot(engine, body.rootId);
     const subdir = normalizeSubdirOrError(body.subdir || "");
@@ -62,16 +86,16 @@ export function createMobileWorkbenchRoute(engine) {
     try {
       switch (body.action) {
         case "mkdir":
-          return c.json(await mkdirAction(root, dir, body));
+          return auditActionResult(c, engine, "mobile_workbench.mkdir", await mkdirAction(root, dir, body), auth);
         case "create":
         case "writeText":
-          return c.json(await writeTextAction(engine, root, dir, body));
+          return auditActionResult(c, engine, "mobile_workbench.write", await writeTextAction(engine, root, dir, body), auth);
         case "rename":
-          return c.json(await renameAction(root, dir, body));
+          return auditActionResult(c, engine, "mobile_workbench.rename", await renameAction(root, dir, body), auth);
         case "move":
-          return c.json(await moveAction(root, dir, body));
+          return auditActionResult(c, engine, "mobile_workbench.move", await moveAction(root, dir, body), auth);
         case "safeDelete":
-          return c.json(await safeDeleteAction(engine, root, dir, subdir.value, body));
+          return auditActionResult(c, engine, "mobile_workbench.safe_delete", await safeDeleteAction(engine, root, dir, subdir.value, body), auth);
         default:
           return c.json({ error: "unknown_action" }, 400);
       }
@@ -81,6 +105,8 @@ export function createMobileWorkbenchRoute(engine) {
   });
 
   route.post("/mobile/workbench/upload", async (c) => {
+    const auth = authorizeWorkbench(c, engine, "files.write");
+    if (auth.response) return auth.response;
     const body = await safeJson(c);
     const root = resolveRoot(engine, body.rootId);
     const subdir = normalizeSubdirOrError(body.subdir || "");
@@ -106,14 +132,51 @@ export function createMobileWorkbenchRoute(engine) {
         results.push({ name: file?.name || null, ok: false, error: err.code || "upload_failed" });
       }
     }
-    return c.json({ ok: results.every((item) => item.ok), rootId: root.id, results, files: await listFiles(dir) });
+    return auditActionResult(c, engine, "mobile_workbench.upload", {
+      ok: results.every((item) => item.ok),
+      rootId: root.id,
+      results,
+      files: await listFiles(dir),
+    }, auth);
   });
 
   return route;
 }
 
+function readAvatarAvailability(engine) {
+  const avatars = {};
+  for (const role of ["agent", "user"]) {
+    const baseDir = role === "user" ? engine.userDir : engine.agentDir;
+    avatars[role] = false;
+    if (!baseDir) continue;
+    const dir = path.join(baseDir, "avatars");
+    try {
+      const files = fs.readdirSync(dir);
+      avatars[role] = files.some((file) => /\.(png|jpe?g|webp)$/i.test(file));
+    } catch {}
+  }
+  return avatars;
+}
+
+function sanitizeAgents(agents) {
+  if (!Array.isArray(agents)) return [];
+  return agents.map((agent) => ({
+    id: agent.id,
+    name: agent.name,
+    yuan: agent.yuan,
+    isPrimary: !!agent.isPrimary,
+    isCurrent: !!agent.isCurrent,
+    hasAvatar: !!agent.hasAvatar,
+    chatModel: agent.chatModel || null,
+    homeFolder: agent.homeFolder || null,
+    memoryMasterEnabled: agent.memoryMasterEnabled !== false,
+  }));
+}
+
 function serveContent(c, engine, headOnly) {
   try {
+    const auth = authorizeWorkbench(c, engine, "files.read");
+    if (auth.response) return auth.response;
     const root = resolveRoot(engine, c.req.query("rootId"));
     const subdir = normalizeSubdirOrError(c.req.query("subdir") || "");
     if (subdir.error) return c.json({ error: subdir.error }, 400);
@@ -127,6 +190,42 @@ function serveContent(c, engine, headOnly) {
   } catch (err) {
     return c.json({ error: err.code || "content_failed", detail: err.message }, err.status || 400);
   }
+}
+
+function authorizeWorkbench(c, engine, capability) {
+  const requestContext = createRequestContext(c, engine);
+  if (requestContext.authPrincipal?.kind === "unknown") return { requestContext, decision: null };
+  const decision = requestContext.authorize(capability, {
+    kind: "studio",
+    studioId: requestContext.studioId,
+  });
+  if (decision.allowed) return { requestContext, decision };
+  recordSecurityAuditEvent(c, engine, {
+    action: `mobile_workbench.${capability}`,
+    target: { kind: "studio", studioId: requestContext.studioId },
+    result: "denied",
+    decision,
+    errorCode: decision.reason,
+  });
+  return {
+    requestContext,
+    decision,
+    response: c.json({
+      error: "insufficient_scope",
+      reason: decision.reason,
+      capability,
+    }, 403),
+  };
+}
+
+function auditActionResult(c, engine, action, result, auth) {
+  recordSecurityAuditEvent(c, engine, {
+    action,
+    target: { kind: "studio", studioId: auth?.requestContext?.studioId || null },
+    result: result?.ok === false ? "failed" : "success",
+    decision: auth?.decision || null,
+  });
+  return c.json(result);
 }
 
 async function listFiles(dir) {

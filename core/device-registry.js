@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { normalizePrincipal } from "./security-principal.js";
 
 export const DEVICES_FILE = "devices.json";
 export const DEVICE_CREDENTIALS_FILE = "device-credentials.json";
@@ -71,7 +72,7 @@ export function authenticateDeviceCredential(hanakoHome, secret, { now = new Dat
   persistDeviceAccessRegistries(hanakoHome, registries);
 
   const trustState = device.trustState || "lan";
-  return deepFreeze({
+  return normalizePrincipal({
     kind: "device",
     credentialKind: "device_credential",
     connectionKind: trustState === "tunnel" ? "custom_remote" : "lan",
@@ -460,10 +461,4 @@ function cloneIssuedCredential(issued) {
 
 function clonePlain(value) {
   return JSON.parse(JSON.stringify(value));
-}
-
-function deepFreeze(value) {
-  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }

@@ -287,6 +287,10 @@ export function handleServerMessage(msg: any): void {
       }
       break;
 
+    case 'session_created':
+      Promise.resolve(loadSessionsAction()).catch(err => console.warn('[ws] loadSessions failed:', err));
+      break;
+
     case 'desk_changed':
       loadDeskFiles();
       break;

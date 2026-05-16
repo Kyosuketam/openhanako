@@ -63,4 +63,19 @@ describe("HTTP transport context", () => {
       networkMode: "custom_remote",
     })).toEqual({ connectionKind: "custom_remote", reason: null });
   });
+
+  it("requires a real loopback socket before treating a LAN-mode request as local", async () => {
+    const { inferHttpConnectionKind } = await import("../server/http/transport-context.js");
+
+    expect(inferHttpConnectionKind({
+      hostHeader: "127.0.0.1:14500",
+      networkMode: "lan",
+    })).toEqual({ connectionKind: "lan", reason: null });
+
+    expect(inferHttpConnectionKind({
+      hostHeader: "127.0.0.1:14500",
+      remoteAddress: "127.0.0.1",
+      networkMode: "lan",
+    })).toEqual({ connectionKind: "local", reason: null });
+  });
 });

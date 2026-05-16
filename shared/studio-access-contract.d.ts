@@ -14,6 +14,7 @@ export type StudioAccessActorKind =
   | 'anonymous'
   | 'local_user'
   | 'device'
+  | 'account_user'
   | 'platform_account';
 
 export type StudioAccessDataOwner = 'user_server' | 'hana_cloud_studio';
@@ -22,6 +23,8 @@ export type StudioAccessCapability =
   | 'chat'
   | 'resources.read'
   | 'resources.write'
+  | 'files.read'
+  | 'files.write'
   | 'files.openLocal'
   | 'tools.run'
   | 'plugins.use'

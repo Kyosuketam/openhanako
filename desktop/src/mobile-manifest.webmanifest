@@ -8,7 +8,7 @@
   "theme_color": "#f7f1e7",
   "icons": [
     {
-      "src": "./assets/Hanako.png",
+      "src": "./icon.png",
       "sizes": "512x512",
       "type": "image/png"
     }

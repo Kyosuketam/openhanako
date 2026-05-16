@@ -44,6 +44,7 @@ const baseSummary = {
     restartRequired: false,
     lanAddresses: ['192.168.31.75'],
     localMobileUrl: 'http://127.0.0.1:14500/mobile/',
+    candidateLanMobileUrl: 'http://192.168.31.75:14500/mobile/',
     lanMobileUrl: null,
   },
   account: {
@@ -72,7 +73,8 @@ describe('AccessTab', () => {
             listenHost: '0.0.0.0',
             configuredPort: 14500,
             lanMobileUrl: 'http://192.168.31.75:14500/mobile/',
-            restartRequired: true,
+            candidateLanMobileUrl: 'http://192.168.31.75:14500/mobile/',
+            restartRequired: false,
           },
         }));
       }
@@ -113,10 +115,17 @@ describe('AccessTab', () => {
 
     render(<AccessTab />);
 
-    expect(await screen.findByDisplayValue('http://127.0.0.1:14500/mobile/')).toBeInTheDocument();
+    await screen.findByText('settings.access.mobileUrlLocalHint');
+    expect(screen.queryByDisplayValue('http://127.0.0.1:14500/mobile/')).not.toBeInTheDocument();
     expect(screen.getByDisplayValue('14500')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: 'settings.access.lanToggle' }));
+    expect(await screen.findByDisplayValue('http://192.168.31.75:14500/mobile/')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'settings.access.qrCode' })).toHaveAttribute(
+      'src',
+      expect.stringContaining('/api/access/mobile-qr.svg?port=14500'),
+    );
+
     fireEvent.click(screen.getByRole('button', { name: 'settings.access.saveNetwork' }));
 
     await waitFor(() => {
@@ -126,7 +135,7 @@ describe('AccessTab', () => {
       }));
     });
     expect(await screen.findByDisplayValue('http://192.168.31.75:14500/mobile/')).toBeInTheDocument();
-    expect(screen.getByText('settings.access.restartRequired')).toBeInTheDocument();
+    expect(screen.queryByText('settings.access.restartRequired')).not.toBeInTheDocument();
   });
 
   it('generates a mobile access key and keeps the returned secret visible once', async () => {

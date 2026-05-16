@@ -17,7 +17,7 @@ export function inferHttpConnectionKind({
     return { connectionKind: "local", reason: null };
   }
 
-  if (hostIsLoopback && remoteIsLoopback !== false) {
+  if (hostIsLoopback && remoteIsLoopback === true) {
     return { connectionKind: "local", reason: null };
   }
   if (mode === "lan") return { connectionKind: "lan", reason: null };

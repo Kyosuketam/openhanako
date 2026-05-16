@@ -1,4 +1,5 @@
 import { authenticateDeviceCredential } from "./device-registry.js";
+import { normalizePrincipal } from "./security-principal.js";
 import { authenticateWebSession } from "./web-session-store.js";
 
 export function createServerAuthService({
@@ -26,7 +27,7 @@ export function createServerAuthService({
       const webPrincipal = authenticateWebSession(hanakoHome, cookieHeader, { now });
       if (!webPrincipal) return null;
       if (!principalAllowsConnection(webPrincipal, connectionKind)) return null;
-      return deepFreeze({
+      return normalizePrincipal({
         ...webPrincipal,
         connectionKind: connectionKind === "local"
           ? (webPrincipal.connectionKind || connectionKind)
@@ -42,7 +43,7 @@ export function createServerAuthService({
     const devicePrincipal = authenticateDeviceCredential(hanakoHome, parsed.token, { now });
     if (!devicePrincipal) return null;
     if (!principalAllowsConnection(devicePrincipal, connectionKind)) return null;
-    return deepFreeze({
+    return normalizePrincipal({
       ...devicePrincipal,
       connectionKind: connectionKind === "local" ? devicePrincipal.connectionKind : connectionKind,
     });
@@ -76,7 +77,7 @@ function parseCredential({ authorization, queryToken, allowQueryToken, connectio
 }
 
 function createLocalPrincipal(runtimeContext) {
-  return deepFreeze({
+  return normalizePrincipal({
     kind: "local_user",
     credentialKind: "loopback_token",
     connectionKind: "local",
@@ -102,10 +103,4 @@ function principalAllowsConnection(principal, connectionKind) {
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-function deepFreeze(value) {
-  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }

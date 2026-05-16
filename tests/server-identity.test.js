@@ -133,6 +133,8 @@ describe("server identity loader", () => {
       "pairing-sessions.json",
       "server-network.json",
       "studio-mounts.json",
+      path.join("security", "grants.json"),
+      path.join("security", "execution-leases.json"),
     ]));
     expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "devices.json"), "utf-8"))).toMatchObject({
       schemaVersion: 1,
@@ -154,6 +156,14 @@ describe("server identity loader", () => {
     expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "studio-mounts.json"), "utf-8"))).toMatchObject({
       schemaVersion: 1,
       mounts: [],
+    });
+    expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "security", "grants.json"), "utf-8"))).toMatchObject({
+      schemaVersion: 1,
+      grants: [],
+    });
+    expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "security", "execution-leases.json"), "utf-8"))).toMatchObject({
+      schemaVersion: 1,
+      leases: [],
     });
   });
 
