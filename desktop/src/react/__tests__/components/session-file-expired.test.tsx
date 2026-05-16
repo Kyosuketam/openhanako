@@ -213,7 +213,7 @@ describe('expired session file presentation', () => {
 
     expect(screen.getByRole('img', { name: 'img.png' })).toHaveAttribute(
       'src',
-      'https://hana.example/api/resources/res_sf_img/content?token=remote%20token',
+      'https://hana.example/api/resources/res_sf_img/content',
     );
   });
 });

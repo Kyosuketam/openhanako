@@ -29,6 +29,7 @@ export function createServerAuthService({
 
     const devicePrincipal = authenticateDeviceCredential(hanakoHome, parsed.token, { now });
     if (!devicePrincipal) return null;
+    if (!deviceCredentialAllowsConnection(devicePrincipal, connectionKind)) return null;
     return deepFreeze({
       ...devicePrincipal,
       connectionKind: connectionKind === "local" ? devicePrincipal.connectionKind : connectionKind,
@@ -76,6 +77,13 @@ function createLocalPrincipal(runtimeContext) {
     officialServiceKind: runtimeContext?.officialServiceKind ?? null,
     scopes: Array.isArray(runtimeContext?.capabilities) ? [...runtimeContext.capabilities] : ["chat", "resources", "tools"],
   });
+}
+
+function deviceCredentialAllowsConnection(principal, connectionKind) {
+  if (!principal || principal.kind !== "device") return true;
+  if (connectionKind === "local") return true;
+  if (principal.trustState === "tunnel") return connectionKind === "custom_remote";
+  return connectionKind === "lan";
 }
 
 function isNonEmptyString(value) {

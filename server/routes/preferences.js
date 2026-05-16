@@ -26,6 +26,9 @@ import {
   isComputerUsePlatformSupported,
   selectedComputerProviderId,
 } from "../../core/computer-use/platform-support.js";
+import { collectSecretPatchPaths, maskSecretValue, resolveSecretPatch } from "../../shared/secret-custody.js";
+import { denySecretMutationWithoutScope, denyWithoutScope } from "../http/capability-guard.js";
+import { recordSecurityAuditEvent } from "../http/security-audit.js";
 
 function selectedComputerProviderIdFromSettings(settings, platform = process.platform) {
   return selectedComputerProviderId(settings, { platform });
@@ -56,12 +59,12 @@ export function createPreferencesRoute(engine, { platform = process.platform } =
         models,
         search: {
           provider: search.provider || "",
-          api_key: search.api_key || "",
+          api_key: maskSecretValue(search.api_key || ""),
         },
         utility_api: {
           provider: utilityApi.provider || "",
           base_url: utilityApi.base_url || "",
-          api_key: utilityApi.api_key || "",
+          api_key: maskSecretValue(utilityApi.api_key || ""),
         },
       });
     } catch (err) {
@@ -76,6 +79,11 @@ export function createPreferencesRoute(engine, { platform = process.platform } =
       if (!body || typeof body !== "object") {
         return c.json({ error: "invalid JSON body" }, 400);
       }
+      const settingsDenied = denyWithoutScope(c, "settings.write");
+      if (settingsDenied) return settingsDenied;
+      const secretFields = collectSecretPatchPaths(body, ["api_key"]);
+      const secretDenied = denySecretMutationWithoutScope(c, secretFields);
+      if (secretDenied) return secretDenied;
 
       const sections = [];
       let needsModelSync = false;
@@ -105,13 +113,21 @@ export function createPreferencesRoute(engine, { platform = process.platform } =
 
       // 搜索配置
       if (body.search) {
-        engine.setSearchConfig(body.search);
+        engine.setSearchConfig(resolveSecretPatch({
+          patch: body.search,
+          existing: engine.getSearchConfig?.() || {},
+          secretKeys: ["api_key"],
+        }));
         sections.push("search");
       }
 
       // utility API 配置
       if (body.utility_api) {
-        engine.setUtilityApi(body.utility_api);
+        engine.setUtilityApi(resolveSecretPatch({
+          patch: body.utility_api,
+          existing: engine.getUtilityApi?.() || {},
+          secretKeys: ["api_key"],
+        }));
         sections.push("utility_api");
       }
 
@@ -123,6 +139,12 @@ export function createPreferencesRoute(engine, { platform = process.platform } =
       if (sections.length > 0) {
         emitAppEvent(engine, "models-changed", { agentId: engine.currentAgentId || null });
       }
+      recordSecurityAuditEvent(c, engine, {
+        action: "settings.preferences.models.update",
+        target: "preferences.models",
+        secretFields,
+        metadata: { sections },
+      });
       return c.json({ ok: true });
     } catch (err) {
       debugLog()?.error("api", `PUT /api/preferences/models failed: ${err.message}`);

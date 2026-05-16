@@ -117,6 +117,54 @@ describe("server auth service", () => {
     });
   });
 
+  it("requires paired device credentials to match their transport trust state", async () => {
+    tmpDir = makeTmpDir();
+    const { createDeviceCredential } = await import("../core/device-registry.js");
+    const { createServerAuthService } = await import("../core/server-auth.js");
+    const lanIssued = createDeviceCredential(tmpDir, {
+      serverNodeId: "node_local",
+      userId: "user_local",
+      studioIds: ["studio_local"],
+      displayName: "LAN Phone",
+      deviceKind: "mobile",
+      trustState: "lan",
+      scopes: ["chat"],
+      now: "2026-05-16T00:00:00.000Z",
+    });
+    const tunnelIssued = createDeviceCredential(tmpDir, {
+      serverNodeId: "node_local",
+      userId: "user_local",
+      studioIds: ["studio_local"],
+      displayName: "Tunnel Phone",
+      deviceKind: "mobile",
+      trustState: "tunnel",
+      scopes: ["chat"],
+      now: "2026-05-16T00:00:00.000Z",
+    });
+    const auth = createServerAuthService({
+      hanakoHome: tmpDir,
+      loopbackToken: "local-secret",
+      runtimeContext: runtimeContext(),
+    });
+
+    expect(auth.authenticateRequest({
+      authorization: `Bearer ${lanIssued.secret}`,
+      connectionKind: "custom_remote",
+    })).toBeNull();
+    expect(auth.authenticateRequest({
+      authorization: `Bearer ${tunnelIssued.secret}`,
+      connectionKind: "lan",
+    })).toBeNull();
+    expect(auth.authenticateRequest({
+      authorization: `Bearer ${tunnelIssued.secret}`,
+      connectionKind: "custom_remote",
+    })).toMatchObject({
+      kind: "device",
+      trustState: "tunnel",
+      connectionKind: "custom_remote",
+    });
+  });
+
   it("rejects revoked and unknown credentials without falling back to local user", async () => {
     tmpDir = makeTmpDir();
     const {

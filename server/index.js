@@ -25,6 +25,8 @@ import { safeJson } from "./hono-helpers.js";
 import { createOutboundProxyRuntime } from "../lib/net/outbound-proxy.js";
 import { createServerAuthService } from "../core/server-auth.js";
 import { resolveServerListenOptions } from "../core/server-network-config.js";
+import { inferHttpConnectionKind } from "./http/transport-context.js";
+import { authorizeHttpRoute } from "./http/route-security.js";
 
 // Pi SDK 的 fetch 请求会累积 AbortSignal listener，提高上限避免无害警告
 setMaxListeners(50);
@@ -38,6 +40,7 @@ import { createUploadRoute } from "./routes/upload.js";
 import { createProvidersRoute } from "./routes/providers.js";
 import { createAvatarRoute } from "./routes/avatar.js";
 import { createAgentsRoute } from "./routes/agents.js";
+import { createDevicesRoute } from "./routes/devices.js";
 import { createCharacterCardsRoute } from "./routes/character-cards.js";
 import { createDeskRoute } from "./routes/desk.js";
 import { createSkillsRoute } from "./routes/skills.js";
@@ -175,13 +178,30 @@ app.use("*", async (c, next) => {
   c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (c.req.method === "OPTIONS") return c.text("", 204);
 
+  const transport = inferHttpConnectionKind({
+    hostHeader: c.req.header("host"),
+    remoteAddress: c.env?.incoming?.socket?.remoteAddress,
+    networkMode: serverNetwork.mode,
+  });
+  if (!transport.connectionKind) {
+    return c.json({ error: "invalid_transport", detail: transport.reason }, 403);
+  }
+
   const authPrincipal = serverAuthService.authenticateRequest({
     authorization: c.req.header("authorization"),
     queryToken: c.req.query("token"),
     allowQueryToken: true,
-    connectionKind: inferConnectionKindFromHost(c.req.header("host")),
+    connectionKind: transport.connectionKind,
   });
   if (!authPrincipal) return c.json({ error: "forbidden" }, 403);
+  const authz = authorizeHttpRoute({
+    method: c.req.method,
+    path: new URL(c.req.url).pathname,
+    principal: authPrincipal,
+  });
+  if (!authz.allowed) {
+    return c.json({ error: authz.error }, authz.status);
+  }
   c.set("authPrincipal", authPrincipal);
 
   await next();
@@ -392,6 +412,7 @@ app.route("/api", createUploadRoute(engine));
 app.route("/api", createProvidersRoute(engine));
 app.route("/api", createAvatarRoute(engine));
 app.route("/api", createAgentsRoute(engine));
+app.route("/api", createDevicesRoute(engine));
 app.route("/api", createCharacterCardsRoute(engine));
 app.route("/api", createDeskRoute(engine, hub));
 app.route("/api", createSkillsRoute(engine));
@@ -560,12 +581,26 @@ try {
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     if (url.pathname !== "/internal/browser") return; // let Hono handle it
 
+    const transport = inferHttpConnectionKind({
+      hostHeader: req.headers.host,
+      remoteAddress: req.socket?.remoteAddress,
+      networkMode: serverNetwork.mode,
+    });
+    if (!transport.connectionKind) {
+      socket.destroy();
+      return;
+    }
+
     const authPrincipal = serverAuthService.authenticateRequest({
+      authorization: req.headers.authorization,
       queryToken: url.searchParams.get("token"),
       allowQueryToken: true,
-      connectionKind: inferConnectionKindFromHost(req.headers.host),
+      connectionKind: transport.connectionKind,
     });
-    if (!authPrincipal) {
+    const authz = authPrincipal
+      ? authorizeHttpRoute({ method: "GET", path: url.pathname, principal: authPrincipal })
+      : null;
+    if (!authPrincipal || !authz?.allowed) {
       socket.destroy();
       return;
     }
@@ -670,14 +705,6 @@ try {
 } catch (err) {
   console.error("[server] 启动失败:", err.message);
   process.exit(1);
-}
-
-function inferConnectionKindFromHost(hostHeader) {
-  const host = String(hostHeader || "").trim().toLowerCase();
-  if (/^(localhost|127\.0\.0\.1|\[::1\]|::1)(:\d+)?$/.test(host)) return "local";
-  if (serverNetwork.mode === "custom_remote") return "custom_remote";
-  if (serverNetwork.mode === "lan") return "lan";
-  return "local";
 }
 
 // 优雅退出（防止并发关闭，带超时保护）

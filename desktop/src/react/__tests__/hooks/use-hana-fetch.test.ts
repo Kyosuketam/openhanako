@@ -7,6 +7,7 @@ vi.mock('../../stores', () => ({
       serverPort: '3210',
       serverToken: 'test-token-123',
       activeServerConnection: {
+        kind: 'local',
         serverId: 'local',
         studioId: 'local',
         label: 'Local Hana',
@@ -15,6 +16,7 @@ vi.mock('../../stores', () => ({
         token: 'test-token-123',
         authState: 'paired',
         trustState: 'local',
+        credentialKind: 'loopback_token',
         capabilities: ['chat', 'resources', 'tools'],
       },
     }),

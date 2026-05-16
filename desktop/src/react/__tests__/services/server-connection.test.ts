@@ -148,6 +148,28 @@ describe('server connection helpers', () => {
       .toBe('http://127.0.0.1:3210/api/sessions?limit=10&token=test-token-123');
   });
 
+  it('does not put remote device credentials into browser-loadable URL query strings', () => {
+    const local = createLocalServerConnection({
+      serverPort: '3210',
+      serverToken: 'local-token',
+    })!;
+    const remote = {
+      ...local,
+      connectionId: 'custom:remote',
+      kind: 'custom_remote' as const,
+      label: 'Remote Studio',
+      baseUrl: 'https://hana.example',
+      wsUrl: 'wss://hana.example',
+      token: 'remote-token',
+      trustState: 'tunnel' as const,
+      credentialKind: 'device_credential' as const,
+    };
+
+    expect(buildConnectionUrl(remote, '/api/resources/res_1/content', { includeTokenQuery: true }))
+      .toBe('https://hana.example/api/resources/res_1/content');
+    expect(buildConnectionWsUrl(remote, '/ws')).toBe('wss://hana.example/ws');
+  });
+
   it('builds fetch URLs without leaking token into the query string', () => {
     const connection = createLocalServerConnection({
       serverPort: '3210',

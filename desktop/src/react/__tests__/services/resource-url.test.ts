@@ -82,7 +82,7 @@ describe('resolveFileRefUrl', () => {
 
     expect(result).toEqual({
       mode: 'resource-content',
-      url: 'https://hana.example/api/resources/res_sf_asset/content?token=remote%20token',
+      url: 'https://hana.example/api/resources/res_sf_asset/content',
     });
     expect(platform.getFileUrl).not.toHaveBeenCalled();
   });
@@ -94,7 +94,7 @@ describe('resolveFileRefUrl', () => {
     });
 
     expect(result.mode).toBe('resource-content');
-    expect(result.url).toBe('https://hana.example/api/resources/res_sf_asset/content?token=remote%20token');
+    expect(result.url).toBe('https://hana.example/api/resources/res_sf_asset/content');
   });
 
   it('uses inline data only when there is no path or resource content link', () => {

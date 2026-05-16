@@ -1,0 +1,128 @@
+import { describe, expect, it } from "vitest";
+
+const localPrincipal = Object.freeze({
+  kind: "local_user",
+  credentialKind: "loopback_token",
+  connectionKind: "local",
+  scopes: ["chat", "resources", "tools"],
+});
+
+function devicePrincipal(scopes = []) {
+  return Object.freeze({
+    kind: "device",
+    credentialKind: "device_credential",
+    connectionKind: "lan",
+    scopes,
+  });
+}
+
+describe("HTTP route security policy", () => {
+  it("keeps local owner access unrestricted", async () => {
+    const { authorizeHttpRoute } = await import("../server/http/route-security.js");
+
+    expect(authorizeHttpRoute({
+      method: "GET",
+      path: "/api/providers/summary",
+      principal: localPrincipal,
+    })).toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({
+      method: "POST",
+      path: "/api/shutdown",
+      principal: localPrincipal,
+    })).toMatchObject({ allowed: true });
+  });
+
+  it("allows scoped trusted devices to read masked settings without opening local-only admin routes", async () => {
+    const { authorizeHttpRoute } = await import("../server/http/route-security.js");
+    const principal = devicePrincipal(["chat", "resources.read", "settings.read"]);
+
+    for (const [method, path] of [
+      ["GET", "/api/config"],
+      ["GET", "/api/providers/summary"],
+      ["GET", "/api/preferences/models"],
+      ["GET", "/api/bridge/status"],
+      ["GET", "/api/agents/hana/config"],
+    ]) {
+      expect(authorizeHttpRoute({ method, path, principal })).toMatchObject({
+        allowed: true,
+      });
+    }
+
+    for (const [method, path] of [
+      ["POST", "/api/shutdown"],
+      ["GET", "/internal/browser"],
+    ]) {
+      expect(authorizeHttpRoute({ method, path, principal })).toMatchObject({
+        allowed: false,
+        status: 403,
+        error: "local_only_route",
+      });
+    }
+  });
+
+  it("separates remote settings writes, provider management, bridge management, and secret mutation scopes", async () => {
+    const { authorizeHttpRoute } = await import("../server/http/route-security.js");
+    const settingsWriter = devicePrincipal(["settings.write"]);
+    const providerManager = devicePrincipal(["providers.manage"]);
+    const bridgeManager = devicePrincipal(["bridge.manage"]);
+
+    expect(authorizeHttpRoute({ method: "PUT", path: "/api/config", principal: settingsWriter }))
+      .toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({ method: "PUT", path: "/api/agents/hana/config", principal: settingsWriter }))
+      .toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({ method: "PUT", path: "/api/preferences/models", principal: settingsWriter }))
+      .toMatchObject({ allowed: true });
+
+    expect(authorizeHttpRoute({ method: "POST", path: "/api/providers/test", principal: providerManager }))
+      .toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({ method: "POST", path: "/api/providers/fetch-models", principal: providerManager }))
+      .toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({ method: "PUT", path: "/api/providers/deepseek/models/deepseek-chat", principal: providerManager }))
+      .toMatchObject({ allowed: true });
+
+    expect(authorizeHttpRoute({ method: "POST", path: "/api/bridge/config", principal: bridgeManager }))
+      .toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({ method: "POST", path: "/api/bridge/test", principal: bridgeManager }))
+      .toMatchObject({ allowed: true });
+
+    expect(authorizeHttpRoute({ method: "POST", path: "/api/bridge/config", principal: settingsWriter }))
+      .toMatchObject({ allowed: false, error: "insufficient_scope" });
+    expect(authorizeHttpRoute({ method: "PUT", path: "/api/config", principal: providerManager }))
+      .toMatchObject({ allowed: false, error: "insufficient_scope" });
+  });
+
+  it("allows scoped device access to chat identity and resources without opening admin APIs", async () => {
+    const { authorizeHttpRoute } = await import("../server/http/route-security.js");
+    const principal = devicePrincipal(["chat", "resources.read"]);
+
+    expect(authorizeHttpRoute({ method: "GET", path: "/api/server/identity", principal }))
+      .toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({ method: "GET", path: "/api/sessions", principal }))
+      .toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({ method: "GET", path: "/api/resources/res_1", principal }))
+      .toMatchObject({ allowed: true });
+    expect(authorizeHttpRoute({ method: "HEAD", path: "/api/resources/res_1/content", principal }))
+      .toMatchObject({ allowed: true });
+
+    expect(authorizeHttpRoute({ method: "POST", path: "/api/resources/res_1/content", principal }))
+      .toMatchObject({
+        allowed: false,
+        status: 403,
+        error: "insufficient_scope",
+      });
+  });
+
+  it("defaults unknown API routes to local-only until they are explicitly classified", async () => {
+    const { authorizeHttpRoute } = await import("../server/http/route-security.js");
+
+    expect(authorizeHttpRoute({
+      method: "GET",
+      path: "/api/new-surface",
+      principal: devicePrincipal(["chat", "resources.read", "admin"]),
+    })).toMatchObject({
+      allowed: false,
+      status: 403,
+      error: "local_only_route",
+    });
+  });
+});

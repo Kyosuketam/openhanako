@@ -119,6 +119,10 @@ function appendQueryParam(url: string, key: string, value: string): string {
   return `${beforeHash}${sep}${encodeURIComponent(key)}=${encodeURIComponent(value)}${hash}`;
 }
 
+export function canUseQueryToken(connection: ServerConnection): boolean {
+  return connection.kind === 'local' && connection.credentialKind === 'loopback_token';
+}
+
 function headersToRecord(headers: HeadersInit | undefined): Record<string, string> {
   if (!headers) return {};
   if (headers instanceof Headers) {
@@ -271,7 +275,7 @@ export function buildConnectionUrl(
 ): string {
   assertRoutePath(path);
   const url = `${trimTrailingSlash(connection.baseUrl)}${path}`;
-  if (!opts.includeTokenQuery || !connection.token) return url;
+  if (!opts.includeTokenQuery || !connection.token || !canUseQueryToken(connection)) return url;
   return appendQueryParam(url, 'token', connection.token);
 }
 
@@ -281,7 +285,7 @@ export function buildConnectionWsUrl(
 ): string {
   assertRoutePath(path);
   const url = `${trimTrailingSlash(connection.wsUrl)}${path}`;
-  if (!connection.token) return url;
+  if (!connection.token || !canUseQueryToken(connection)) return url;
   return appendQueryParam(url, 'token', connection.token);
 }
 
