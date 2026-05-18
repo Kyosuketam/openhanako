@@ -2268,6 +2268,7 @@
   "action.retry": "Retry",
   "subagentAbort": "Stop",
   "subagentAborted": "Stopped",
+  "preview.toggle": "Preview panel",
   "preview.markdownPreview": "Preview",
   "preview.exitMarkdownPreview": "Back to editing",
   "preview.openInNewWindow": "Open in new window",

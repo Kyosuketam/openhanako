@@ -2220,6 +2220,7 @@
   "action.retry": "Retry",
   "subagentAbort": "停止",
   "subagentAborted": "停止済み",
+  "preview.toggle": "プレビューパネル",
   "preview.markdownPreview": "プレビュー",
   "preview.exitMarkdownPreview": "編集に戻る",
   "preview.openInNewWindow": "新しいウィンドウで表示",

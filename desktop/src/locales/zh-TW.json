@@ -2220,6 +2220,7 @@
   "action.retry": "重试",
   "subagentAbort": "終止",
   "subagentAborted": "已終止",
+  "preview.toggle": "預覽面板",
   "preview.markdownPreview": "預覽",
   "preview.exitMarkdownPreview": "回到編輯",
   "preview.openInNewWindow": "在新視窗查看",

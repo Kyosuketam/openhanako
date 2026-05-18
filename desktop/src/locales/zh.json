@@ -2273,6 +2273,7 @@
   "action.retry": "重试",
   "subagentAbort": "终止",
   "subagentAborted": "已终止",
+  "preview.toggle": "预览面板",
   "preview.markdownPreview": "预览",
   "preview.exitMarkdownPreview": "回到编辑",
   "preview.openInNewWindow": "在新窗口查看",

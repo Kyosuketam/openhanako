@@ -10,6 +10,7 @@ import { StatusBar } from '../components/StatusBar';
 import { ToastContainer } from '../components/ToastContainer';
 import { toggleSidebar } from '../components/SidebarLayout';
 import { toggleJianSidebar } from '../stores/desk-actions';
+import { togglePreviewPanel } from '../stores/preview-actions';
 import { useStore } from '../stores';
 import { createNewSession } from '../stores/session-actions';
 import {
@@ -125,6 +126,7 @@ function MobileDesktopShell({
 }) {
   const sidebarOpen = useStore(s => s.sidebarOpen);
   const jianOpen = useStore(s => s.jianOpen);
+  const previewOpen = useStore(s => s.previewOpen);
   const currentTab = useStore(s => s.currentTab);
   const isNarrow = useNarrowMobileViewport();
   const edgeGestureRef = useRef<MobileEdgeGesture | null>(null);
@@ -223,6 +225,7 @@ function MobileDesktopShell({
       <AppTitlebar
         sidebarOpen={sidebarOpen}
         jianOpen={jianOpen}
+        previewOpen={previewOpen}
         showChannelTabs={false}
         showWidgetButtons={false}
         onToggleSidebar={() => {
@@ -232,6 +235,10 @@ function MobileDesktopShell({
         onToggleJian={() => {
           if (!jianOpen) useStore.setState({ sidebarOpen: false });
           toggleJianSidebar(!jianOpen);
+        }}
+        onTogglePreview={() => {
+          if (!previewOpen) useStore.setState({ sidebarOpen: false, jianOpen: false });
+          togglePreviewPanel();
         }}
       />
       <div className="app mobile-desktop-app">

@@ -2220,6 +2220,7 @@
   "action.retry": "Retry",
   "subagentAbort": "중지",
   "subagentAborted": "중지됨",
+  "preview.toggle": "미리보기 패널",
   "preview.markdownPreview": "미리보기",
   "preview.exitMarkdownPreview": "편집으로 돌아가기",
   "preview.openInNewWindow": "새 창에서 보기",
